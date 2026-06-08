@@ -1,0 +1,20 @@
+{
+  "_comment": "Synthetic COMC listings for dry-run. Real listings come from comc_scraper.",
+  "listings": [
+    {"raw_name": "Charizard Holo", "price": 120.00, "url": "https://www.comc.com/Cards/a1",
+     "set_hint": "Base Set", "number_hint": "4/102", "condition": "EX-NM"},
+    {"raw_name": "Blastoise Holo", "price": 35.00, "url": "https://www.comc.com/Cards/a2",
+     "set_hint": "Base Set", "number_hint": "2/102", "condition": "EX-NM"},
+    {"raw_name": "Pikachu", "price": 1.50, "url": "https://www.comc.com/Cards/a3",
+     "set_hint": "Jungle", "number_hint": "60/64", "condition": "EX-NM"},
+    {"raw_name": "Charizard ex", "price": 9999.00, "url": "https://www.comc.com/Cards/a4",
+     "set_hint": "Base Set", "number_hint": "4/102", "condition": "EX-NM",
+     "_note": "priced way above market -> negative margin -> excluded"},
+    {"raw_name": "Charizard PSA 9", "price": 5.00, "url": "https://www.comc.com/Cards/a5",
+     "set_hint": "Base Set", "number_hint": "4/102", "condition": "Graded PSA 9",
+     "graded": true, "grader": "PSA", "_note": "graded -> skipped by default"},
+    {"raw_name": "Some Unknown Card", "price": 2.00, "url": "https://www.comc.com/Cards/a6",
+     "set_hint": "Not A Real Set", "number_hint": "999/999", "condition": "EX-NM",
+     "_note": "unresolvable set -> no match"}
+  ]
+}
