@@ -66,6 +66,22 @@ python -m comc_scanner refresh-prices --era all
 python -m comc_scanner dry-run --era vintage --listings tests/fixtures/listings_sample.json
 ```
 
+### Validar/ajustar os seletores da COMC (resolve o ponto dos seletores)
+
+O DOM exato das listagens da COMC não é público, então os seletores em
+`comc_scanner/comc_scraper.py` são best-effort. Para calibrar contra uma página real:
+
+```bash
+# 1) Capture uma página renderizada da COMC (logado, passando o Cloudflare):
+python -m comc_scanner capture --headful --out tests/fixtures/comc_sample.html \
+    --url "https://www.comc.com/Cards/Pokemon,sl,fb,aUngraded,rCOMC,gEX-NM,i100,p1"
+# 2) Veja o que o parser extrai (nome/preço/número/condição/set):
+python -m comc_scanner parse-file --html tests/fixtures/comc_sample.html
+# 3) Ajuste _parse_dom() no comc_scraper.py até extrair tudo (incl. set_hint), e valide
+#    o pipeline completo contra a página salva (matching real vs preços do TCG):
+python -m comc_scanner dry-run --era vintage --html tests/fixtures/comc_sample.html
+```
+
 Flags úteis: `--top-n 50`, `--min-margin 0.20`, `--min-confidence 0.80`,
 `--interval 3600`, `--condition EX-NM`, `--include-graded`, `--headful`,
 `--no-sheets`, `--sets "Evolving Skies,SV09"`, `--restart`. Variáveis equivalentes
@@ -81,10 +97,17 @@ preço de referência conservador, eras e cursor de chunk.
 
 ## Limitações conhecidas / avisos
 
-- **COMC + Cloudflare + Termos de Uso**: a raspagem exige navegador real e pode infringir
-  os Termos da COMC. Use volume baixo, ritmo conservador e trate como ferramenta de uso
-  pessoal. O DOM exato das listagens da COMC não é público — valide/ajuste os seletores em
-  `comc_scanner/comc_scraper.py` contra uma página real salva (use `parse_html_file`).
+- **robots.txt vs. Termos de Uso da COMC**: o `robots.txt` da COMC **permite** user-agents
+  comuns (`User-agent: *` → `Allow: /`) e só bloqueia bots de treino de IA (GPTBot, CCBot,
+  ClaudeBot, ...) com `ai-train=no`. O scanner usa UA de navegador comum, é de uso pessoal
+  (não treina IA) e **checa o robots.txt antes de raspar** (aborta se for proibido); nunca
+  use um UA da lista bloqueada. Os **Termos de Uso** são separados do robots.txt e podem
+  restringir acesso automatizado — não há API oficial (o "COMCAgent" é só um serviço de
+  compra automática). Recomendação: revise os ToS, mantenha volume baixo/ritmo conservador,
+  uso pessoal; se quiser garantia, peça permissão à COMC.
+- **Seletores da COMC**: o DOM exato das listagens não é público — os seletores em
+  `comc_scraper.py` são best-effort. Calibre com `capture` → `parse-file` → `dry-run --html`
+  (ver acima).
 - **Acurácia de match**: cada deal traz `confidence` e `match_reason`; matches abaixo de
   `MIN_MATCH_CONFIDENCE` ficam só no JSON (campo `low_confidence`), fora do top-50.
 - **Condição/subtype**: por padrão compara COMC ungraded `EX-NM` com o `marketPrice` (NM)

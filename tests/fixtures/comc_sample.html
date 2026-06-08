@@ -1,0 +1,20 @@
+<!doctype html>
+<!--
+  PLACEHOLDER COMC page for selector validation. This uses schema.org JSON-LD, which the
+  parser reads first. A REAL COMC page may not use JSON-LD; capture one with
+  `python -m comc_scanner capture --out tests/fixtures/comc_sample.html` (logged in) and
+  then `python -m comc_scanner parse-file --html tests/fixtures/comc_sample.html` to see
+  what is extracted, and adjust `_parse_dom` in comc_scanner/comc_scraper.py accordingly.
+  NOTE: matching also needs the SET per listing — extend the parser to capture set_hint
+  from the real DOM (this placeholder only carries name/number/price).
+-->
+<html><head>
+<script type="application/ld+json">
+{"@type":"Product","name":"Charizard - 4/102","url":"https://www.comc.com/Cards/Pokemon/Base_Set/Charizard/1",
+ "offers":{"@type":"Offer","price":"120.00","priceCurrency":"USD","availability":"https://schema.org/InStock"}}
+</script>
+<script type="application/ld+json">
+{"@type":"Product","name":"Blastoise - 2/102","url":"https://www.comc.com/Cards/Pokemon/Base_Set/Blastoise/2",
+ "offers":{"@type":"Offer","price":"35.00","priceCurrency":"USD"}}
+</script>
+</head><body><div id="listings">rendered listings would be here</div></body></html>

@@ -22,8 +22,11 @@ import random
 import re
 import time
 import urllib.parse
+import urllib.robotparser
 from pathlib import Path
 from typing import Iterator
+
+import requests
 
 from .config import CACHE_DIR, Settings
 from .models import ComcListing
@@ -32,6 +35,33 @@ from .normalize import detect_graded
 log = logging.getLogger("comc_scanner.comc")
 
 COMC_BASE = "https://www.comc.com"
+# A normal desktop browser UA. NB: COMC's robots.txt allows "*" but blocks AI-training
+# crawlers (GPTBot, CCBot, ClaudeBot, ...). Never set the UA to one of those tokens.
+BROWSER_UA = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0 Safari/537.36"
+)
+
+
+class ComcAccessError(RuntimeError):
+    """Raised when COMC access is disallowed (e.g. by robots.txt)."""
+
+
+def robots_allowed(target_url: str, user_agent: str = BROWSER_UA) -> tuple[bool, str]:
+    """Check COMC robots.txt for `user_agent`. Fails open (allowed) if it can't be read."""
+    rp = urllib.robotparser.RobotFileParser()
+    try:
+        resp = requests.get(
+            f"{COMC_BASE}/robots.txt", headers={"User-Agent": user_agent}, timeout=15
+        )
+        resp.raise_for_status()
+        rp.parse(resp.text.splitlines())
+    except Exception as exc:  # noqa: BLE001 - don't block scanning on a robots fetch error
+        return True, f"robots.txt not read ({exc}); proceeding"
+    allowed = rp.can_fetch(user_agent, target_url)
+    return allowed, ("allowed by robots.txt" if allowed else "DISALLOWED by robots.txt")
+
+
 _PRICE_RE = re.compile(r"\$\s?([0-9][0-9,]*\.?[0-9]{0,2})")
 _NUM_RE = re.compile(r"#\s?([A-Za-z]*\d[\w/]*)")
 # A bare collector number anywhere in a title, e.g. "4/102", "021/128", "TG12/TG30".
@@ -202,15 +232,20 @@ class ComcScraper:
         self._state_path = CACHE_DIR / "browser_state.json"
 
     def __enter__(self) -> "ComcScraper":
+        # Good-faith robots.txt check before opening a browser to COMC.
+        allowed, reason = robots_allowed(build_browse_url(self.settings, page=1), BROWSER_UA)
+        log.info("COMC robots.txt: %s", reason)
+        if not allowed:
+            raise ComcAccessError(
+                "COMC robots.txt disallows this user-agent/path; aborting scan."
+            )
+
         from playwright.sync_api import sync_playwright  # type: ignore
 
         self._pw = sync_playwright().start()
         self._browser = self._pw.chromium.launch(headless=self.settings.comc_headless)
         ctx_kwargs = {
-            "user_agent": (
-                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0 Safari/537.36"
-            ),
+            "user_agent": BROWSER_UA,
             "locale": "en-US",
             "viewport": {"width": 1366, "height": 900},
         }
@@ -266,6 +301,20 @@ class ComcScraper:
             self._context.storage_state(path=str(self._state_path))
         except Exception as exc:  # noqa: BLE001
             log.warning("COMC warm-up navigation failed: %s", exc)
+        finally:
+            page.close()
+
+    def capture(self, url: str, out_path: str | Path) -> Path:
+        """Navigate to `url` and save the rendered HTML, for offline selector tuning."""
+        page = self._context.new_page()
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=45000)
+            page.wait_for_timeout(2500)
+            out = Path(out_path)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(page.content(), encoding="utf-8")
+            log.info("Saved rendered HTML to %s (%d bytes)", out, out.stat().st_size)
+            return out
         finally:
             page.close()
 

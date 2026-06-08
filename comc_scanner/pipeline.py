@@ -7,7 +7,7 @@ import signal
 import time
 
 from .config import Settings
-from .comc_scraper import ComcScraper, listings_from_json
+from .comc_scraper import ComcAccessError, ComcScraper, listings_from_json, parse_html_file
 from .matcher import match
 from .models import Deal
 from .normalize import normalize_set, set_aliases
@@ -121,8 +121,28 @@ class Scanner:
                  self.client.snapshot_date(), len(sets), era)
         return len(sets)
 
-    def dry_run(self, listings_path: str, era: str = "all") -> BestDeals:
-        listings = listings_from_json(listings_path)
+    def capture(self, url: str, out_path: str) -> None:
+        """Save a rendered COMC page to disk (for offline selector tuning)."""
+        try:
+            with ComcScraper(self.settings) as scraper:
+                scraper.capture(url, out_path)
+        except (ImportError, ComcAccessError) as exc:
+            log.error("Capture unavailable: %s", exc)
+
+    def parse_file(self, html_path: str) -> None:
+        """Parse a saved COMC page and print the listings extracted (selector check)."""
+        listings = parse_html_file(html_path)
+        log.info("Parsed %d listings from %s", len(listings), html_path)
+        for L in listings[:15]:
+            print(f"  {L.raw_name!r}  price={L.price}  set={L.set_hint!r} "
+                  f"num={L.number_hint!r}  cond={L.condition!r}  url={L.url}")
+        if not listings:
+            print("  (no listings parsed — the COMC selectors in comc_scraper.py likely "
+                  "need adjusting for this page's DOM)")
+
+    def dry_run(self, listings_path: str | None = None, era: str = "all",
+                html_path: str | None = None) -> BestDeals:
+        listings = parse_html_file(html_path) if html_path else listings_from_json(listings_path)
         groups = self.client.groups()
         tsets = to_sets(groups, self.settings)
         amap = self._alias_map(tsets)
@@ -215,6 +235,9 @@ class Scanner:
                 "Playwright is required for live COMC scanning. Install with:\n"
                 "    pip install -r requirements.txt && playwright install chromium"
             )
+            return best
+        except ComcAccessError as exc:
+            log.error("COMC access blocked: %s", exc)
             return best
 
         self.reporter.flush(best.qualifying(), era, best.low_conf())

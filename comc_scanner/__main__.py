@@ -72,9 +72,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_refresh = sub.add_parser("refresh-prices", help="force re-download the TCGCSV snapshot")
     _add_common(p_refresh)
 
-    p_dry = sub.add_parser("dry-run", help="match/report a local listings fixture (no COMC)")
+    p_dry = sub.add_parser("dry-run", help="match/report a local fixture or saved page (no live COMC)")
     _add_common(p_dry)
-    p_dry.add_argument("--listings", required=True, help="path to a listings JSON fixture")
+    g = p_dry.add_mutually_exclusive_group(required=True)
+    g.add_argument("--listings", help="path to a listings JSON fixture")
+    g.add_argument("--html", help="path to a saved COMC page (parsed, then matched)")
+
+    p_cap = sub.add_parser("capture", help="save a rendered COMC page to disk (needs Playwright)")
+    _add_common(p_cap)
+    p_cap.add_argument("--url", help="COMC URL to capture (default: Pokemon browse page)")
+    p_cap.add_argument("--out", default="tests/fixtures/comc_sample.html", help="output HTML path")
+
+    p_parse = sub.add_parser("parse-file", help="print listings parsed from a saved COMC page")
+    _add_common(p_parse)
+    p_parse.add_argument("--html", required=True, help="path to a saved COMC page")
 
     return parser
 
@@ -86,11 +97,20 @@ def main(argv: list[str] | None = None) -> int:
     _apply_overrides(settings, args)
     era = args.era or settings.default_era
 
+    if args.command == "parse-file":
+        Scanner(settings).parse_file(args.html)
+        return 0
+
     scanner = Scanner(settings)
     if args.command == "refresh-prices":
         scanner.refresh_prices(era)
     elif args.command == "dry-run":
-        scanner.dry_run(args.listings, era)
+        scanner.dry_run(listings_path=args.listings, era=era, html_path=args.html)
+    elif args.command == "capture":
+        from .comc_scraper import build_browse_url
+
+        url = args.url or build_browse_url(settings, page=1)
+        scanner.capture(url, args.out)
     elif args.command == "once":
         scanner.run_once(era, resume=not args.restart)
     elif args.command == "run":
