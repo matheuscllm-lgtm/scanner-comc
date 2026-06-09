@@ -180,8 +180,10 @@ def _parse_jsonld(html: str) -> list[ComcListing]:
 # the set/number/name/condition in its path; price and stock live in the listprice markup.
 _CARDDATA_SPLIT = re.compile(r'<div\s+class="carddata"\s*>', re.IGNORECASE)
 # .../<year>/<set>/<number>/<name>/<id>/<Ungraded|Graded>/<source>/<condition>
+# Host is optional: Firecrawl's rawHtml carries absolute URLs, but a live browser's
+# serialized DOM (Playwright/patchright page.content()) uses RELATIVE hrefs (/Cards/...).
 _DETAIL_URL_RE = re.compile(
-    r'href="(https?://(?:www\.)?comc\.com/Cards/Pokemon/'
+    r'href="((?:https?://(?:www\.)?comc\.com)?/Cards/Pokemon/'
     r'([^"/]+)/([^"]+?)/([^"/]+)/([^"/]+)/(\d+)/(Ungraded|Graded)/([^"/]+)/([^"/]+))"',
     re.IGNORECASE,
 )
@@ -212,6 +214,8 @@ def _parse_dom(html: str) -> list[ComcListing]:
         if not m:
             continue
         url, _year, set_seg, number_seg, name_seg, item_id, graded_seg, _src, cond_seg = m.groups()
+        if url.startswith("/"):  # relative href (live-browser DOM) -> absolute
+            url = COMC_BASE + url
         # Price: the first $-amount in the listprice region (falls back to first in block).
         lp = _LISTPRICE_RE.search(block)
         price = _to_float(block[lp.end():] if lp else block)
@@ -323,22 +327,42 @@ class ComcScraper:
             log.info("COMC fetch mode: firecrawl (stealth proxy, headless).")
             return self
 
+        # COMC's Cloudflare Turnstile is only auto-solved by a HEADFUL real-Chrome browser;
+        # headless never clears it (cf_clearance is bound to the headful fingerprint). So
+        # force headful in playwright mode — on a server this renders to a virtual display,
+        # still fully automated (patchright solves the challenge, no human needed).
+        if self.settings.comc_headless:
+            log.info("COMC needs a headful browser to clear Cloudflare; forcing headful.")
+            self.settings.comc_headless = False
         sync_playwright, engine = _import_playwright()
-        log.info("COMC fetch mode: playwright (%s, %s).", engine,
-                 "headful" if not self.settings.comc_headless else "headless")
+        log.info("COMC fetch mode: playwright (%s, headful).", engine)
         profile_dir = Path(self.settings.comc_profile_dir)
         profile_dir.mkdir(parents=True, exist_ok=True)
+        # Clear stale single-instance locks left by an unclean prior shutdown — otherwise a
+        # `channel="chrome"` launch fails and silently falls back to (CF-blocked) chromium.
+        for lock in ("SingletonLock", "SingletonCookie", "SingletonSocket"):
+            try:
+                (profile_dir / lock).unlink()
+            except OSError:
+                pass
         self._pw = sync_playwright().start()
-        # Persistent context: the warmed profile keeps the Cloudflare cf_clearance cookie,
-        # so headless runs reuse it instead of re-solving the challenge each time.
-        self._context = self._pw.chromium.launch_persistent_context(
-            user_data_dir=str(profile_dir),
-            headless=self.settings.comc_headless,
-            user_agent=BROWSER_UA,
-            locale="en-US",
-            viewport={"width": 1366, "height": 900},
-            args=["--disable-blink-features=AutomationControlled"],
-        )
+        # Persistent context keeps Cloudflare's cf_clearance cookie across runs.
+        kw = dict(user_data_dir=str(profile_dir), headless=self.settings.comc_headless)
+        if engine == "patchright":
+            # patchright auto-solves the Cloudflare Turnstile ONLY with its defaults intact:
+            # real Chrome channel, NO user_agent override, NO automation args, no_viewport.
+            # (Verified: headful real-Chrome patchright clears COMC's challenge.)
+            kw["no_viewport"] = True
+            try:
+                self._context = self._pw.chromium.launch_persistent_context(channel="chrome", **kw)
+            except Exception as exc:  # Chrome not installed -> patched chromium
+                log.warning("Chrome channel unavailable (%s); using chromium.", exc)
+                self._context = self._pw.chromium.launch_persistent_context(**kw)
+        else:
+            kw.update(user_agent=BROWSER_UA, locale="en-US",
+                      viewport={"width": 1366, "height": 900},
+                      args=["--disable-blink-features=AutomationControlled"])
+            self._context = self._pw.chromium.launch_persistent_context(**kw)
         self._seed_cookies()
         self._warm_up()
         return self
@@ -379,15 +403,26 @@ class ComcScraper:
         finally:
             page.close()
 
-    def _fetch_html(self, url: str) -> str:
-        """Return rendered HTML for `url` via the active transport."""
+    def _fetch_html(self, url: str, solve_timeout_s: int = 60) -> str:
+        """Return rendered HTML for `url` via the active transport.
+
+        For playwright, polls while a Cloudflare Turnstile is still in progress — patchright
+        auto-solves it (headful) within tens of seconds on a cold profile; once cf_clearance
+        is cached the first read already has the page, so there's no wait.
+        """
         if self._fetcher is not None:
             return self._fetcher.get_html(url)
         page = self._context.new_page()
         try:
-            page.goto(url, wait_until="domcontentloaded", timeout=45000)
-            page.wait_for_timeout(1500)
-            return page.content()
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            html = page.content()
+            waited = 0
+            while (waited < solve_timeout_s and "Just a moment" in html
+                   and "searchResultsStats" not in html and "cardexplorer" not in html):
+                page.wait_for_timeout(3000)
+                waited += 3
+                html = page.content()
+            return html
         finally:
             page.close()
 
