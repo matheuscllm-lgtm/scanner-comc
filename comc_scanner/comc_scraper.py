@@ -96,7 +96,7 @@ def build_browse_url(
     segments: list[str] = []
     if search_term:
         segments.append("=" + urllib.parse.quote_plus(search_term))
-    segments.append("sl")  # sort: lowest price first
+    segments.append(settings.comc_sort or "sh")  # sort: sh=highest first, sl=lowest
     segments.append("fb")  # Buy-It-Now only
     segments.append("aGraded" if settings.comc_include_graded else "aUngraded")
     # Seller-repository filter. `rCOMC` (COMC's RCR consignment repo) is ESSENTIALLY EMPTY

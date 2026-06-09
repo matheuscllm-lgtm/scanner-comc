@@ -87,6 +87,10 @@ class Settings:
     # by the per-listing condition (from the card URL). Keep only these (lowercased) — the
     # NM-range top raw grades. Comparing a played card to the NM TCG price would inflate margin.
     comc_condition_allow: tuple[str, ...] = ("nm", "mint", "m", "ex-nm", "exnm", "near mint")
+    # Browse sort: "sh" (highest price first) surfaces valuable NM cards + big-$ arbitrage
+    # on the first pages — better than "sl" once we filter to NM-only (cheapest pages are
+    # all played commons that get dropped). "sl" = lowest first.
+    comc_sort: str = "sh"
     comc_request_delay_s: float = 4.0
     comc_headless: bool = True
     # Fetch transport: "firecrawl" (headless, no browser/login — clears Cloudflare via
@@ -135,6 +139,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         comc_condition_band=_get("COMC_CONDITION_BAND", "EX-NM"),
         comc_include_graded=_get_bool("COMC_INCLUDE_GRADED", False),
         comc_seller_repo=_get("COMC_SELLER_REPO", ""),
+        comc_sort=(_get("COMC_SORT", "sh") or "sh").lower(),
         comc_condition_allow=tuple(
             c.strip().lower() for c in _get(
                 "COMC_CONDITION_ALLOW", "nm,mint,m,ex-nm,exnm,near mint"

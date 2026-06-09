@@ -34,6 +34,11 @@ def test_seller_repo_opt_in_when_set():
     assert ",rCOMC," in url
 
 
+def test_sort_defaults_to_highest_first_and_is_configurable():
+    assert ",sh," in build_browse_url(_settings())                    # default: highest first
+    assert ",sl," in build_browse_url(_settings(comc_sort="sl"))      # opt back to lowest
+
+
 def test_graded_facet_flips_with_include_graded():
     assert ",aUngraded," in build_browse_url(_settings(comc_include_graded=False))
     assert ",aGraded," in build_browse_url(_settings(comc_include_graded=True))
