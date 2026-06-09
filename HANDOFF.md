@@ -1,49 +1,72 @@
 # HANDOFF — Scanner de arbitragem COMC → TCGPlayer (Pokémon)
 
-> Documento de transferência para retomar o trabalho em uma nova sessão (inclusive via
-> Claude Code remoto no celular). Última atualização: 2026-06-08 (sessão 2).
+> Documento de transferência para retomar o trabalho em uma nova sessão. Última
+> atualização: **2026-06-09 (sessão 4)**. Leia a seção 0 abaixo — é a fonte da verdade;
+> as seções 0-bis/12 abaixo são histórico.
 
 ---
 
-## 0-ter. RESUMO DA MANHÃ (overnight 2026-06-08→09) — ✅ funcional + útil
+## 0. ⭐ RETOMAR AQUI — estado atual (2026-06-09)
 
-**Estado:** scanner **funcionante, headless, testado (37), com CI verde e agendador**.
-Rode assim (o comando que entrega deals):
+**O scanner está FUNCIONANTE, ÚTIL e HONESTO.** Roda de **dois jeitos**, com ou sem créditos:
+
 ```
-python -m comc_scanner targeted --era recent --no-sheets   # MODERN (melhor yield)
-python -m comc_scanner targeted --era vintage --no-sheets   # WotC (yield fino)
+# GRÁTIS (sem crédito Firecrawl) — navegador local, é o que está em uso agora:
+python -m comc_scanner targeted --era recent  --fetch-mode playwright --no-sheets   # MODERN
+python -m comc_scanner targeted --era vintage --fetch-mode playwright --no-sheets   # WotC
+
+# Firecrawl (rápido, headless, mas precisa de crédito — esgotou no overnight, 402):
+python -m comc_scanner targeted --era recent --no-sheets
 ```
-**O que funciona agora:** 19 sets validados no catálogo = 15 WotC + **4 modern** (151, Paldea
-Evolved, Obsidian Flames, Surging Sparks). Modern rende MUITO mais (SV 151 → ~18 deals NM
-conf 0.95; ex. Squirtle 170/165 $37→$116). Vintage rende ~1/15 sets (mercado same-US fino).
 
-**✅ DOIS transportes agora (Firecrawl OU navegador local grátis):**
-- **Firecrawl** (`COMC_FETCH_MODE=firecrawl`, default): rápido, headless, sem navegador — mas
-  **créditos esgotaram** no overnight (402). Recarregar billing pra voltar a usar.
-- **Playwright/patchright local (GRÁTIS, sem crédito)** — implementado 2026-06-09 a pedido do
-  operador. Comando:
-  ```
-  python -m comc_scanner targeted --era recent --fetch-mode playwright
-  ```
-  Provado ao vivo: SV 151 → 9 deals NM ≥20% (Squirtle 170/165 $37→$116), **zero crédito**.
-  **Como funciona / requisitos:** patchright + Chrome real + **headful** (auto-resolve o
-  Cloudflare Turnstile, sem clique humano; num server roda em display virtual). É forçado
-  headful automaticamente. Perfil persistente em `.cache/pw_profile_comc` guarda o cf_clearance
-  (`warm` opcional pra pré-aquecer: `python -m comc_scanner warm`). **NÃO serve pro GH Actions**
-  (cloud sem display/Chrome) — lá use Firecrawl. Caveat: a página `sh` modern mistura subsets
-  Korean/variante — futura melhoria: filtrar só o base EN.
+### Os dois transportes (`COMC_FETCH_MODE`)
+1. **`playwright` (GRÁTIS, sem crédito)** — patchright + **Chrome real + HEADFUL** auto-resolve
+   o Cloudflare Turnstile da COMC (sem clique humano; num server roda em display virtual).
+   Forçado headful automaticamente (headless NUNCA fura o CF aqui). Perfil persistente
+   `.cache/pw_profile_comc` guarda o cf_clearance; `comc_scanner warm` pré-aquece. **Requer
+   Chrome instalado + display (ou virtual).** NÃO serve pro GitHub Actions (cloud sem display).
+2. **`firecrawl` (default)** — `proxy:stealth`, headless, sem navegador. Precisa `FIRECRAWL_API_KEY`.
+   É o único que serve pro GH Actions. **Créditos esgotados no overnight** (recarregar billing).
 
-**AÇÕES DO OPERADOR (quando puder):**
-1. Recarregar créditos Firecrawl (desbloqueia scans + validação).
-2. Adicionar secret `FIRECRAWL_API_KEY` no repo (Settings→Secrets→Actions) p/ o workflow cloud.
-3. Validar os **9 modern pendentes** (SV04..SV10, `validated:false` no catálogo): rodar um scrape
-   `<slug>,sh,fb,aUngraded,i100,p1` em cada e virar a flag (slugs já vêm de URLs reais da COMC).
-4. Decidir threshold/escopo: margens grandes em alt-art (#>165) são spread real de secret rare —
-   **validar carta a carta no TCGplayer (condição NM)** antes de comprar. Scanner é técnico, não
-   recomenda compra.
+> Por que o local precisa headful: o IP deste ambiente (BR) é hard-blocked pela CF da COMC em
+> acesso simples; só navegador real headful OU proxy US residencial (Firecrawl) furam.
 
-**Decisão estratégica registrada:** o valor do scanner está nos **sets MODERNOS** (estoque raw
-NM abundante na COMC). Ampliar o catálogo modern (já tem 12; faltam validar 9) é o maior ROI.
+### Filtros/invariantes ATIVOS (todos no pipeline, aplicados nos modos live)
+- **NM-only** (`comc_condition_allow`): só condições NM/EX-NM; a faceta `gEX-NM` é ignorada no
+  set-path, então filtra pela condição da URL de cada carta.
+- **English-only** (`comc_exclude_variants`, NOVO 2026-06-09): dropa sub-printings de outro idioma
+  (Japanese/Korean/...). **Crítico:** o set-path da COMC retorna TODOS os idiomas do set e o
+  TCGCSV é EN — casar JP/KR com preço EN inflava a lista com falsos positivos (28 → 3 deals reais).
+- Margem bruta ≥ `--min-margin` (default 0.20). Sem piso de preço (operador decide).
+
+### Catálogo (`comc_scanner/comc_set_slugs.json`) — 19 validados + 9 pendentes
+- **15 WotC** (Base..Skyridge) + **4 modern** validados: SV 151, SV02 Paldea Evolved,
+  SV03 Obsidian Flames, SV08 Surging Sparks.
+- **9 modern `validated:false`** (SV04..SV10): slugs já vêm de URLs reais; falta 1 scrape cada
+  pra confirmar e virar a flag (precisa crédito Firecrawl OU rodar via playwright).
+- Vintage WotC: formato `{year, slug}`. Modern: `{year:"", slug}` (segmento único c/ ano embutido).
+
+### Entrega da tabela (formato pedido pelo operador 2026-06-09)
+- Coluna **Card = nome + número** ("Pikachu 173/165"); coluna **Link = [oferta](url)** clicável.
+- CSV/JSON mantêm `card`, `number`, `comc_url` separados (p/ planilha).
+
+### ⚠️ Leitura honesta do mercado (importante)
+COMC-EN ≈ TCGPlayer-EN (mesmo mercado US, sem vantagem cambial dos scanners irmãos), então
+**arbitragem real é FINA**: depois do filtro English-only, 2 sets modernos grandes (151 +
+Surging Sparks) deram só **3 deals pequenos** (~$1-2 lucro). O "jackpot" anterior de ~28 deals
+era 96% ruído de variante JP/KR casada com preço EN. O scanner é TÉCNICO — entrega candidatos;
+o operador valida carta-a-carta no TCGPlayer (condição NM) e decide capital.
+
+### Próximos passos (ordem de valor)
+1. Validar os 9 modern pendentes (via playwright agora, sem precisar de crédito).
+2. Rodar o panorama completo dos modern validados pra ver o yield honesto real.
+3. (Opcional) Robustez do playwright p/ varredura longa: matar Chrome órfão entre runs; um
+   `targeted` único = 1 sessão de browser (ok), mas invocações sobrepostas brigam pelo perfil.
+4. Recarregar Firecrawl quando quiser o caminho cloud/GH Actions.
+
+### Estado git
+Branch `claude/wizardly-maxwell-gnhfe3`, PR #1. ~25 commits. **38 testes offline, CI verde.**
+⚠️ Uma sessão cloud paralela escuta o PR — **fazer `git fetch` + rebase antes de todo push.**
 
 ---
 
