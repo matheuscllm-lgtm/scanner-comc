@@ -267,18 +267,28 @@ def listings_from_json(path: str | Path) -> list[ComcListing]:
 
 
 class ComcScraper:
-    """Playwright-backed scraper. Lazily imports Playwright so the rest of the
-    package works without a browser installed."""
+    """Fetches and parses COMC browse pages.
+
+    Two transports, selected by `settings.comc_fetch_mode`:
+      - "firecrawl" (default): headless via Firecrawl's stealth proxy — no local browser,
+        no login, no cookies. Clears the Cloudflare challenge from a stealth egress.
+      - "playwright": a local Chromium (optionally seeded with `COMC_SESSION_COOKIE`).
+        Lazily imported so the package works without a browser installed.
+
+    Either way, `iter_listings`/`capture` hand the rendered HTML to `parse_page`.
+    """
 
     def __init__(self, settings: Settings):
         self.settings = settings
+        self.mode = (settings.comc_fetch_mode or "firecrawl").lower()
+        self._fetcher = None  # Firecrawl fetcher
         self._pw = None
         self._browser = None
         self._context = None
         self._state_path = CACHE_DIR / "browser_state.json"
 
     def __enter__(self) -> "ComcScraper":
-        # Good-faith robots.txt check before opening a browser to COMC.
+        # Good-faith robots.txt check before fetching from COMC (either transport).
         allowed, reason = robots_allowed(build_browse_url(self.settings, page=1), BROWSER_UA)
         log.info("COMC robots.txt: %s", reason)
         if not allowed:
@@ -286,8 +296,20 @@ class ComcScraper:
                 "COMC robots.txt disallows this user-agent/path; aborting scan."
             )
 
+        if self.mode == "firecrawl":
+            from .firecrawl_client import ComcFirecrawlFetcher
+
+            self._fetcher = ComcFirecrawlFetcher(
+                api_key=self.settings.firecrawl_api_key or None,
+                proxy=self.settings.firecrawl_proxy,
+                wait_ms=self.settings.firecrawl_wait_ms,
+            )
+            log.info("COMC fetch mode: firecrawl (stealth proxy, headless).")
+            return self
+
         from playwright.sync_api import sync_playwright  # type: ignore
 
+        log.info("COMC fetch mode: playwright (local Chromium).")
         self._pw = sync_playwright().start()
         self._browser = self._pw.chromium.launch(headless=self.settings.comc_headless)
         ctx_kwargs = {
@@ -309,6 +331,9 @@ class ComcScraper:
         return self
 
     def __exit__(self, *exc) -> None:
+        if self._fetcher is not None:
+            self._fetcher.close()
+            return
         try:
             if self._context:
                 self._context.storage_state(path=str(self._state_path))
@@ -323,6 +348,18 @@ class ComcScraper:
             self._pw and self._pw.stop()
         except Exception:
             pass
+
+    def _fetch_html(self, url: str) -> str:
+        """Return rendered HTML for `url` via the active transport."""
+        if self._fetcher is not None:
+            return self._fetcher.get_html(url)
+        page = self._context.new_page()
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=45000)
+            page.wait_for_timeout(1500)
+            return page.content()
+        finally:
+            page.close()
 
     def _seed_cookies(self) -> None:
         raw = self.settings.comc_session_cookie
@@ -351,43 +388,35 @@ class ComcScraper:
             page.close()
 
     def capture(self, url: str, out_path: str | Path) -> Path:
-        """Navigate to `url` and save the rendered HTML, for offline selector tuning."""
-        page = self._context.new_page()
-        try:
-            page.goto(url, wait_until="domcontentloaded", timeout=45000)
-            page.wait_for_timeout(2500)
-            out = Path(out_path)
-            out.parent.mkdir(parents=True, exist_ok=True)
-            out.write_text(page.content(), encoding="utf-8")
-            log.info("Saved rendered HTML to %s (%d bytes)", out, out.stat().st_size)
-            return out
-        finally:
-            page.close()
+        """Fetch `url` and save the rendered HTML, for offline selector tuning."""
+        out = Path(out_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(self._fetch_html(url), encoding="utf-8")
+        log.info("Saved rendered HTML to %s (%d bytes)", out, out.stat().st_size)
+        return out
 
     def iter_listings(
         self, search_term: str | None, max_pages: int = 0, start_page: int = 1,
     ) -> Iterator[tuple[int, list[ComcListing]]]:
-        """Yield (page_number, listings) for each COMC page until empty / max_pages."""
-        page = self._context.new_page()
-        try:
-            n = 0
-            page_no = start_page
-            while True:
-                if max_pages and n >= max_pages:
-                    break
-                url = build_browse_url(self.settings, search_term=search_term, page=page_no)
-                try:
-                    page.goto(url, wait_until="domcontentloaded", timeout=45000)
-                    page.wait_for_timeout(1500)
-                    listings = parse_page(page.content())
-                except Exception as exc:  # noqa: BLE001
-                    log.warning("COMC page %s failed (%s); stopping this set.", page_no, exc)
-                    break
-                if not listings:
-                    break
-                yield page_no, listings
-                n += 1
-                page_no += 1
-                time.sleep(self.settings.comc_request_delay_s + random.uniform(0, 2.0))
-        finally:
-            page.close()
+        """Yield (page_number, listings) for each COMC page until empty / max_pages.
+
+        A persistent Cloudflare block on a page (ComcBlockedError, after the fetcher's
+        own retries) ends this set's iteration rather than crashing the whole scan.
+        """
+        n = 0
+        page_no = start_page
+        while True:
+            if max_pages and n >= max_pages:
+                break
+            url = build_browse_url(self.settings, search_term=search_term, page=page_no)
+            try:
+                listings = parse_page(self._fetch_html(url))
+            except Exception as exc:  # noqa: BLE001 — one set must not kill the sweep
+                log.warning("COMC page %s failed (%s); stopping this set.", page_no, exc)
+                break
+            if not listings:
+                break
+            yield page_no, listings
+            n += 1
+            page_no += 1
+            time.sleep(self.settings.comc_request_delay_s + random.uniform(0, 2.0))

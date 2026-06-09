@@ -23,7 +23,9 @@ def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--max-run-seconds", type=int, help="time budget per run (0=unlimited)")
     p.add_argument("--condition", help="COMC condition band facet, e.g. EX-NM, LP")
     p.add_argument("--include-graded", action="store_true", help="include graded cards")
-    p.add_argument("--headful", action="store_true", help="show the browser window")
+    p.add_argument("--fetch-mode", choices=["firecrawl", "playwright"],
+                   help="COMC transport (default firecrawl: headless, no browser)")
+    p.add_argument("--headful", action="store_true", help="show the browser window (playwright)")
     p.add_argument("--no-sheets", action="store_true", help="never push to Google Sheets")
 
 
@@ -50,8 +52,11 @@ def _apply_overrides(settings, args) -> None:
         settings.comc_condition_band = args.condition
     if args.include_graded:
         settings.comc_include_graded = True
+    if args.fetch_mode:
+        settings.comc_fetch_mode = args.fetch_mode
     if args.headful:
         settings.comc_headless = False
+        settings.comc_fetch_mode = "playwright"  # headful only makes sense with a browser
     if args.no_sheets:
         settings.gsheets_credentials_json = ""
         settings.gsheets_id = ""

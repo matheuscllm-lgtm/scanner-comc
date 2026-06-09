@@ -84,6 +84,12 @@ class Settings:
     comc_include_graded: bool = False
     comc_request_delay_s: float = 4.0
     comc_headless: bool = True
+    # Fetch transport: "firecrawl" (headless, no browser/login — clears Cloudflare via
+    # stealth proxy) or "playwright" (local Chromium). Default firecrawl.
+    comc_fetch_mode: str = "firecrawl"
+    firecrawl_api_key: str = ""
+    firecrawl_wait_ms: int = 12000
+    firecrawl_proxy: str = "stealth"
 
     # Scan behaviour
     min_gross_margin: float = 0.20
@@ -125,6 +131,10 @@ def load_settings(env_file: Path | None = None) -> Settings:
         comc_include_graded=_get_bool("COMC_INCLUDE_GRADED", False),
         comc_request_delay_s=_get_float("COMC_REQUEST_DELAY_SECONDS", 4.0),
         comc_headless=_get_bool("COMC_BROWSER_HEADLESS", True),
+        comc_fetch_mode=(_get("COMC_FETCH_MODE", "firecrawl") or "firecrawl").lower(),
+        firecrawl_api_key=_get("FIRECRAWL_API_KEY"),
+        firecrawl_wait_ms=_get_int("FIRECRAWL_WAIT_MS", 12000),
+        firecrawl_proxy=_get("FIRECRAWL_PROXY", "stealth") or "stealth",
         min_gross_margin=_get_float("MIN_GROSS_MARGIN", 0.20),
         top_n=_get_int("TOP_N", 50),
         scan_interval_s=_get_int("SCAN_INTERVAL_SECONDS", 3600),
