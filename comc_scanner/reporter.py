@@ -13,24 +13,28 @@ from .models import Deal
 log = logging.getLogger("comc_scanner.reporter")
 
 # Columns shown in the console/markdown table (compact subset of the full row).
+# `card_number` = Pokémon name + collector number; `comc_url` rendered as a clickable
+# "[oferta](url)" so the offer link travels with each row.
 _TABLE_COLS = [
     ("rank", "#"),
     ("margin_pct", "Margin%"),
     ("comc_price", "COMC$"),
     ("tcg_reference", "TCG$"),
     ("profit_abs", "Profit$"),
-    ("card", "Card"),
+    ("card_number", "Card"),
     ("set", "Set"),
-    ("number", "No."),
     ("condition", "Cond"),
     ("sub_type", "Sub"),
     ("confidence", "Conf"),
+    ("comc_url", "Link"),
 ]
-_MAXW = {"card": 30, "set": 26, "condition": 10, "sub_type": 16}
+_MAXW = {"card_number": 34, "set": 26, "condition": 10, "sub_type": 16}
 
 
 def _cell(key: str, value: object) -> str:
     s = "" if value is None else str(value)
+    if key == "comc_url":  # render the offer URL as a clickable markdown link
+        return f"[oferta]({s})" if s else ""
     w = _MAXW.get(key)
     if w and len(s) > w:
         s = s[: w - 1] + "…"

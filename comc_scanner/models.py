@@ -74,8 +74,10 @@ class Deal:
             "tcg_reference": round(self.tcg_reference, 2),
             "profit_abs": round(self.tcg_reference - self.listing.price, 2),
             "card": self.product.name,
-            "set": self.product.set_name,
             "number": self.product.number or "",
+            # Pokémon name followed by its collector number, e.g. "Pikachu 173/165".
+            "card_number": f"{self.product.name} {self.product.number or ''}".strip(),
+            "set": self.product.set_name,
             "rarity": self.product.rarity or "",
             "condition": self.listing.condition,
             "sub_type": self.sub_type_used,
