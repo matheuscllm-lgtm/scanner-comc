@@ -99,6 +99,9 @@ class Settings:
     firecrawl_api_key: str = ""
     firecrawl_wait_ms: int = 12000
     firecrawl_proxy: str = "stealth"
+    # Playwright persistent-profile dir: warm it once headful (`warm` cmd) to clear the
+    # Cloudflare challenge, then headless runs reuse its cf_clearance cookie — credit-free.
+    comc_profile_dir: str = str(CACHE_DIR / "pw_profile_comc")
 
     # Scan behaviour
     min_gross_margin: float = 0.20
@@ -151,6 +154,8 @@ def load_settings(env_file: Path | None = None) -> Settings:
         firecrawl_api_key=_get("FIRECRAWL_API_KEY"),
         firecrawl_wait_ms=_get_int("FIRECRAWL_WAIT_MS", 12000),
         firecrawl_proxy=_get("FIRECRAWL_PROXY", "stealth") or "stealth",
+        comc_profile_dir=_get("COMC_PROFILE_DIR", str(CACHE_DIR / "pw_profile_comc"))
+        or str(CACHE_DIR / "pw_profile_comc"),
         min_gross_margin=_get_float("MIN_GROSS_MARGIN", 0.20),
         top_n=_get_int("TOP_N", 50),
         scan_interval_s=_get_int("SCAN_INTERVAL_SECONDS", 3600),

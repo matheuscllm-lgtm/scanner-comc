@@ -100,6 +100,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_cap.add_argument("--url", help="COMC URL to capture (default: Pokemon browse page)")
     p_cap.add_argument("--out", default="tests/fixtures/comc_sample.html", help="output HTML path")
 
+    p_warm = sub.add_parser(
+        "warm", help="headful browser warm-up: clear Cloudflare once so later playwright "
+                     "runs work headless+free (no Firecrawl)"
+    )
+    _add_common(p_warm)
+    p_warm.add_argument("--wait", type=int, default=30,
+                        help="seconds to keep the window open for the challenge to clear")
+    p_warm.add_argument("--url", help="COMC URL to warm on (default: Pokemon browse page)")
+
     p_parse = sub.add_parser("parse-file", help="print listings parsed from a saved COMC page")
     _add_common(p_parse)
     p_parse.add_argument("--html", required=True, help="path to a saved COMC page")
@@ -117,6 +126,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "parse-file":
         Scanner(settings).parse_file(args.html)
         return 0
+
+    if args.command == "warm":
+        ok = Scanner(settings).warm_profile(wait_s=args.wait, url=args.url)
+        print("Warm-up:", "OK — profile ready for headless playwright runs." if ok
+              else "did not confirm a results page (solve the challenge in the window, then retry).")
+        return 0 if ok else 1
 
     scanner = Scanner(settings)
     if args.command == "refresh-prices":

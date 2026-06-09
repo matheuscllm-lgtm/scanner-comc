@@ -55,6 +55,16 @@ class ComcAccessError(RuntimeError):
     """Raised when COMC access is disallowed (e.g. by robots.txt)."""
 
 
+def _import_playwright():
+    """Prefer patchright (stealth fork — better Cloudflare evasion); fall back to playwright."""
+    try:
+        from patchright.sync_api import sync_playwright  # type: ignore
+        return sync_playwright, "patchright"
+    except Exception:
+        from playwright.sync_api import sync_playwright  # type: ignore
+        return sync_playwright, "playwright"
+
+
 def robots_allowed(target_url: str, user_agent: str = BROWSER_UA) -> tuple[bool, str]:
     """Check COMC robots.txt for `user_agent`. Fails open (allowed) if it can't be read."""
     import requests  # lazy: keep the parse-only path free of the requests dependency
@@ -313,26 +323,23 @@ class ComcScraper:
             log.info("COMC fetch mode: firecrawl (stealth proxy, headless).")
             return self
 
-        from playwright.sync_api import sync_playwright  # type: ignore
-
-        log.info("COMC fetch mode: playwright (local Chromium).")
+        sync_playwright, engine = _import_playwright()
+        log.info("COMC fetch mode: playwright (%s, %s).", engine,
+                 "headful" if not self.settings.comc_headless else "headless")
+        profile_dir = Path(self.settings.comc_profile_dir)
+        profile_dir.mkdir(parents=True, exist_ok=True)
         self._pw = sync_playwright().start()
-        self._browser = self._pw.chromium.launch(headless=self.settings.comc_headless)
-        ctx_kwargs = {
-            "user_agent": BROWSER_UA,
-            "locale": "en-US",
-            "viewport": {"width": 1366, "height": 900},
-        }
-        if self._state_path.exists():
-            ctx_kwargs["storage_state"] = str(self._state_path)
-        self._context = self._browser.new_context(**ctx_kwargs)
+        # Persistent context: the warmed profile keeps the Cloudflare cf_clearance cookie,
+        # so headless runs reuse it instead of re-solving the challenge each time.
+        self._context = self._pw.chromium.launch_persistent_context(
+            user_data_dir=str(profile_dir),
+            headless=self.settings.comc_headless,
+            user_agent=BROWSER_UA,
+            locale="en-US",
+            viewport={"width": 1366, "height": 900},
+            args=["--disable-blink-features=AutomationControlled"],
+        )
         self._seed_cookies()
-        try:
-            from playwright_stealth import stealth_sync  # type: ignore
-
-            stealth_sync(self._context)
-        except Exception:
-            pass
         self._warm_up()
         return self
 
@@ -341,19 +348,36 @@ class ComcScraper:
             self._fetcher.close()
             return
         try:
-            if self._context:
-                self._context.storage_state(path=str(self._state_path))
+            self._context and self._context.close()  # persistent profile auto-saves
         except Exception:
             pass
-        for closer in (self._context, self._browser):
-            try:
-                closer and closer.close()
-            except Exception:
-                pass
         try:
             self._pw and self._pw.stop()
         except Exception:
             pass
+
+    def warm(self, url: str | None = None, wait_s: int = 30) -> bool:
+        """Navigate (headful) so Cloudflare clears and the profile stores cf_clearance.
+
+        Returns True if a real COMC results shell was seen. Keeps the page open `wait_s`
+        seconds so a managed-challenge / Turnstile can finish (auto or operator-solved).
+        """
+        url = url or build_browse_url(self.settings, page=1)
+        page = self._context.new_page()
+        try:
+            page.goto(COMC_BASE + "/", wait_until="domcontentloaded", timeout=60000)
+            page.wait_for_timeout(6000)  # let CF's managed challenge settle on the home page
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            page.wait_for_timeout(max(1, wait_s) * 1000)
+            html = page.content()
+            ok = ("searchResultsStats" in html) or ("cardexplorer" in html)
+            log.info("Warm-up %s (%d bytes) on %s",
+                     "OK — Cloudflare cleared, profile saved" if ok
+                     else "did NOT confirm a results page (CF may need a manual solve)",
+                     len(html), url)
+            return ok
+        finally:
+            page.close()
 
     def _fetch_html(self, url: str) -> str:
         """Return rendered HTML for `url` via the active transport."""

@@ -130,6 +130,21 @@ class Scanner:
         except (ImportError, ComcAccessError) as exc:
             log.error("Capture unavailable: %s", exc)
 
+    def warm_profile(self, wait_s: int = 30, url: str | None = None) -> bool:
+        """Headful warm-up: clear Cloudflare once so the persistent profile stores the
+        cf_clearance cookie; afterwards `--fetch-mode playwright` runs work HEADLESS and
+        free (no Firecrawl). Re-run when the cookie expires (CF challenges again)."""
+        self.settings.comc_fetch_mode = "playwright"
+        self.settings.comc_headless = False
+        try:
+            with ComcScraper(self.settings) as scraper:
+                ok = scraper.warm(url=url, wait_s=wait_s)
+        except (ImportError, ComcAccessError) as exc:
+            log.error("Warm-up unavailable: %s", exc)
+            return False
+        log.info("Profile dir: %s", self.settings.comc_profile_dir)
+        return ok
+
     def parse_file(self, html_path: str) -> None:
         """Parse a saved COMC page and print the listings extracted (selector check)."""
         listings = parse_html_file(html_path)
