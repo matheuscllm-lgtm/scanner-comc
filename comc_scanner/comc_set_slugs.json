@@ -109,5 +109,80 @@
     "comc_count": 650,
     "validated": true,
     "note": "Modern format: single path segment (year embedded). 650 ungraded, all NM."
+  },
+  "SV02: Paldea Evolved": {
+    "year": "",
+    "slug": "2023_Pokemon_Scarlet__Violet_-_Paldea_Evolved_PAL",
+    "comc_count": 506,
+    "validated": true,
+    "note": "Scrape-validated: Listings 1-100 of 506, NM. Slug uses '_-_<Name>_<TCGcode PAL>'."
+  },
+  "SV03: Obsidian Flames": {
+    "year": "",
+    "slug": "2023_Pokemon_Scarlet__Violet_Obsidian_Flames_OBF",
+    "comc_count": 480,
+    "validated": true,
+    "note": "Scrape-validated: Listings 1-100 of 480, NM. Display name uses a colon, so slug drops the '_-_' before the set name: '_Violet_Obsidian_Flames_OBF'."
+  },
+  "SV04: Paradox Rift": {
+    "year": "",
+    "slug": "2023_Pokemon_Scarlet__Violet_-_Paradox_Rift_PAR",
+    "validated": false,
+    "note": "Search-confirmed from real COMC card-detail URLs (e.g. /2023/Pokemon_Scarlet__Violet_-_Paradox_Rift_PAR_-_Base/...); not scrape-validated (Firecrawl credits exhausted). Slug uses '_-_<Name>_PAR'."
+  },
+  "SV: Paldean Fates": {
+    "year": "",
+    "slug": "2023_Pokemon_Scarlet__Violet_-_Paldean_Fates_PAF",
+    "validated": false,
+    "note": "Search-confirmed from real COMC card-detail URLs (e.g. /2023/Pokemon_Scarlet__Violet_-_Paldean_Fates_PAF_-_Base/...); not scrape-validated (credits exhausted). Slug uses '_-_<Name>_PAF'."
+  },
+  "SV05: Temporal Forces": {
+    "year": "",
+    "slug": "2024_Pokemon_Scarlet__Violet_Temporal_Forces_TEF",
+    "validated": false,
+    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2024/Pokemon_Scarlet__Violet_Temporal_Forces_TEF_-_Base/...); not scrape-validated (credits exhausted). 2024 set; colon-name pattern (no '_-_' before name)."
+  },
+  "SV06: Twilight Masquerade": {
+    "year": "",
+    "slug": "2024_Pokemon_Scarlet__Violet_Twilight_Masquerade_TWM",
+    "validated": false,
+    "note": "Search-confirmed from real COMC card-detail URLs (e.g. /2024/Pokemon_Scarlet__Violet_Twilight_Masquerade_TWM_-_Base/...); not scrape-validated (credits exhausted). Colon-name pattern."
+  },
+  "SV: Shrouded Fable": {
+    "year": "",
+    "slug": "2024_Pokemon_Scarlet__Violet_Shrouded_Fable_SFA",
+    "validated": false,
+    "note": "Search-confirmed from real COMC card-detail URLs (e.g. /2024/Pokemon_Scarlet__Violet_Shrouded_Fable_SFA_-_Base/...); not scrape-validated (credits exhausted). Colon-name pattern."
+  },
+  "SV07: Stellar Crown": {
+    "year": "",
+    "slug": "2024_Pokemon_SV07_Stellar_Crown_SCR",
+    "validated": false,
+    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2024/Pokemon_SV07_Stellar_Crown_SCR_-_Base/...); not scrape-validated (credits exhausted). NEW naming: 'SV0N_<Name>_<code>' replaces the 'Scarlet__Violet' prefix starting at SV07."
+  },
+  "SV08: Surging Sparks": {
+    "year": "",
+    "slug": "2024_Pokemon_SV08_Surging_Sparks",
+    "comc_count": 439,
+    "validated": true,
+    "note": "Scrape-validated: Listings 1-100 of 439, NM. NEW naming 'SV0N_<Name>' but NO trailing TCG code in the browse slug (card-detail path is SV08_Surging_Sparks_-_Base)."
+  },
+  "SV: Prismatic Evolutions": {
+    "year": "",
+    "slug": "2025_Pokemon_SV_Prismatic_Evolutions_PRE",
+    "validated": false,
+    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2025/Pokemon_SV_Prismatic_Evolutions_PRE_-_Base/...); not scrape-validated (credits exhausted). 2025 set; 'SV_<Name>_<code>' pattern (special set, no SV0N number)."
+  },
+  "SV09: Journey Together": {
+    "year": "",
+    "slug": "2025_Pokemon_SV_Journey_Together_JTG",
+    "validated": false,
+    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2025/Pokemon_SV_Journey_Together_JTG_-_Base/...); not scrape-validated (credits exhausted). 2025; 'SV_<Name>_<code JTG>'."
+  },
+  "SV10: Destined Rivals": {
+    "year": "",
+    "slug": "2025_Pokemon_SV_Destined_Rivals_(DRI)",
+    "validated": false,
+    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2025/Pokemon_SV_Destined_Rivals_(DRI)_-_Base/...); not scrape-validated (credits exhausted). 2025; code is in PARENTHESES not bare suffix: 'SV_Destined_Rivals_(DRI)'. URL-encode '(' ')' if needed."
   }
 }
