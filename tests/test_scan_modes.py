@@ -85,5 +85,7 @@ def test_committed_slug_catalog_loads_and_is_well_formed():
                  if isinstance(v, dict) and v.get("validated")}
     assert len(validated) >= 15  # the WotC catalog the discovery pass produced
     for name, info in validated.items():
-        assert info.get("year") and info.get("slug"), name
-        assert "Pokemon" in info["slug"], name  # COMC WotC slugs start with Pokemon_
+        # slug is required; year may be "" for modern sets (single-segment COMC path).
+        assert info.get("slug"), name
+        assert "year" in info, name
+        assert "Pokemon" in info["slug"], name  # COMC Pokemon slugs contain "Pokemon"

@@ -346,6 +346,20 @@ casa certo com preços/subtypes corretos; **24/24 testes**. Travado por `tests/t
   (c) modern SV/SWSH raw NM na COMC tende a ser ainda mais raro (COMC é vintage-cêntrica) — vale
   uma sondagem antes de investir no catálogo moderno.
 
+### ⭐ Modern (SV/SWSH) é o ALVO MELHOR que vintage (descoberta tardia)
+- Sondagem do **SV 151** (`SV: Scarlet & Violet 151`, TCGCSV abbr MEW): **650 listagens ungraded,
+  TODAS condição "NM"** (≠ vintage, que é EX-NM/played), com chase cards valiosas (Charizard ex
+  $52, Art Rare Charmander $92, Mew ex $67). **Modern raw na COMC é abundante e uniformemente NM**
+  → muito mais superfície de arbitragem que o vintage (estoque fino/played). **Recomendo focar
+  modern** no catálogo.
+- **Formato de slug MODERNO difere:** é um ÚNICO segmento com o ano embutido + código do set,
+  ex. `2023_Pokemon_Scarlet__Violet_-_151_sv2a` (não `<ano>/<slug>`). No catálogo: `year=""` +
+  slug = segmento inteiro; `run_targeted` trata `year==""` como segmento único. SV 151 já
+  adicionado e (em validação ao vivo). Próximo: ampliar catálogo com SV08 Surging Sparks (SSP),
+  SV Prismatic Evolutions (PRE), etc. (descobrir slug via `firecrawl_search site:comc.com`).
+- **Atenção:** a tese same-market segue valendo (COMC≈TCGplayer US), mas com 650 NM/set e cards
+  de $50-90, a chance de achar uma sub-precificação real é bem maior que no vintage.
+
 ### Agendamento recorrente — ✅ scaffold criado
 - `.github/workflows/scan.yml`: `workflow_dispatch` (era/max_pages/margin/budget) + cron diário
   COMENTADO (operador opta, espelhando a convenção dos irmãos). Roda `targeted` headless, exige

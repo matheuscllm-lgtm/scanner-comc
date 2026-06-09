@@ -410,11 +410,13 @@ class Scanner:
         amap = self._alias_map(all_sets)
         targets = []  # (TcgSet, year, slug)
         for tcg_name, info in slugs.items():
-            if not info.get("validated") or not info.get("slug") or not info.get("year"):
+            # year may be "" for modern sets (their COMC path is a single segment with
+            # the year embedded) — only slug is strictly required.
+            if not info.get("validated") or not info.get("slug"):
                 continue
             ts = by_norm.get(normalize_set(tcg_name)) or self._resolve_tset(tcg_name, amap)
             if ts is not None:
-                targets.append((ts, str(info["year"]), info["slug"]))
+                targets.append((ts, str(info.get("year", "")), info["slug"]))
         if not targets:
             log.error("Slug catalog has %d entries but none intersect era '%s'.",
                       len(slugs), era)
@@ -449,9 +451,13 @@ class Scanner:
                     ts, year, slug = targets[idx]
                     ctx = normalize_set(ts.name)
                     set_yielded = False
+                    # Vintage WotC: "<year>/<slug>". Modern (SV/SWSH) COMC paths embed the
+                    # year in a single segment (e.g. "2023_Pokemon_..._151_sv2a") — catalog
+                    # entries store year="" and the full segment as slug.
+                    era_path = f"{year}/{slug}" if year else slug
                     try:
                         for page_no, listings in scraper.iter_listings(
-                            search_term=None, era_path=f"{year}/{slug}",
+                            search_term=None, era_path=era_path,
                             max_pages=self.settings.max_pages_per_set,
                         ):
                             set_yielded = True
