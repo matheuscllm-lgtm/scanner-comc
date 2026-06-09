@@ -66,21 +66,20 @@ python -m comc_scanner refresh-prices --era all
 python -m comc_scanner dry-run --era vintage --listings tests/fixtures/listings_sample.json
 ```
 
-### Validar/ajustar os seletores da COMC (resolve o ponto dos seletores)
+### Validar os seletores da COMC (✅ já calibrados contra páginas reais)
 
-O DOM exato das listagens da COMC não é público, então os seletores em
-`comc_scanner/comc_scraper.py` são best-effort. Para calibrar contra uma página real:
+Os seletores foram calibrados contra capturas REAIS da COMC (2026-06-08): cada resultado é
+um `<div class="carddata">` cujo link de detalhe carrega set/número/nome/condição no path.
+O parser extrai 100/100 listagens por página. Para revalidar (ou re-calibrar se a COMC mudar
+o HTML), use a fixture real commitada:
 
 ```bash
-# 1) Capture uma página renderizada da COMC (logado, passando o Cloudflare):
-python -m comc_scanner capture --headful --out tests/fixtures/comc_sample.html \
-    --url "https://www.comc.com/Cards/Pokemon,sl,fb,aUngraded,rCOMC,gEX-NM,i100,p1"
-# 2) Veja o que o parser extrai (nome/preço/número/condição/set):
-python -m comc_scanner parse-file --html tests/fixtures/comc_sample.html
-# 3) Ajuste _parse_dom() no comc_scraper.py até extrair tudo (incl. set_hint), e valide
-#    o pipeline completo contra a página salva (matching real vs preços do TCG):
-python -m comc_scanner dry-run --era vintage --html tests/fixtures/comc_sample.html
+python -m comc_scanner parse-file --html tests/fixtures/comc_real_capture.html   # 100 listagens
+python -m comc_scanner dry-run --era all --html tests/fixtures/comc_real_capture.html --no-sheets
 ```
+
+`tests/test_parse_real.py` trava essa estrutura: se a COMC mudar o DOM, a CI quebra ali.
+Capturas reais saem via Firecrawl (`proxy: stealth`), sem navegador/login — ver `HANDOFF.md` §10.
 
 Flags úteis: `--top-n 50`, `--min-margin 0.20`, `--min-confidence 0.80`,
 `--interval 3600`, `--condition EX-NM`, `--include-graded`, `--headful`,
@@ -105,9 +104,13 @@ preço de referência conservador, eras e cursor de chunk.
   restringir acesso automatizado — não há API oficial (o "COMCAgent" é só um serviço de
   compra automática). Recomendação: revise os ToS, mantenha volume baixo/ritmo conservador,
   uso pessoal; se quiser garantia, peça permissão à COMC.
-- **Seletores da COMC**: o DOM exato das listagens não é público — os seletores em
-  `comc_scraper.py` são best-effort. Calibre com `capture` → `parse-file` → `dry-run --html`
-  (ver acima).
+- **Seletores da COMC**: ✅ calibrados contra páginas reais (`tests/fixtures/comc_real_capture.html`,
+  travados por `tests/test_parse_real.py`). Se a COMC mudar o HTML, re-calibre `_parse_dom`.
+- **Escopo `/Cards/Pokemon`**: a categoria da COMC inclui muito além do TCG (Topps, Bandai,
+  Topsun, stickers…) que **não estão no TCGCSV** e são corretamente rejeitados. Para arbitragem
+  TCG real, mire em nomes de set TCG (busca por termo / `--sets`), não na categoria inteira.
+- **Fetch ao vivo**: `iter_listings` ainda usa Playwright. Migrar para Firecrawl deixa o scanner
+  headless (sem navegador/login) — ver `HANDOFF.md` §10.
 - **Acurácia de match**: cada deal traz `confidence` e `match_reason`; matches abaixo de
   `MIN_MATCH_CONFIDENCE` ficam só no JSON (campo `low_confidence`), fora do top-50.
 - **Condição/subtype**: por padrão compara COMC ungraded `EX-NM` com o `marketPrice` (NM)

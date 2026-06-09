@@ -9,13 +9,22 @@ Browse-URL grammar (verified), e.g.:
   sl=sort lowest price, fb=Buy-It-Now, aUngraded=exclude graded, g<band>=condition,
   i<n>=items/page, p<n>=page, ,=<term>=text search.
 
-NOTE: COMC's exact listing DOM is not publicly documented. `_parse_page` tries a
-JSON-LD path first, then a heuristic DOM scrape. Validate/adjust the selectors against
-a real saved page (see `parse_html_file` and the `dry-run` flow) before trusting live
-output.
+COMC's listing DOM was reverse-engineered from real captured browse pages (2026-06-08).
+Each result on a `/Cards/Pokemon,...` browse page renders as a `<div class="carddata">`
+block whose card-detail link encodes everything we need in its path:
+
+    /Cards/Pokemon/<year>/<Set_Name>/<Number>/<Card_Name>/<id>/<Graded>/<Source>/<Condition>
+    e.g. /Cards/Pokemon/1999/Topps_..._Series_1_-_Base/TV8/Gary_Oak/4341265/Ungraded/COMC/EX-NM
+
+`parse_page` tries schema.org JSON-LD first (used by the synthetic test fixture); real
+pages carry no JSON-LD, so it falls through to `_parse_dom`, which segments the page into
+carddata blocks and reads the set/number/name/condition from the detail URL plus the
+price and quantity from the `listprice`/`qty` markup. Validate against a saved page with
+`parse-file --html` / `dry-run --html`.
 """
 from __future__ import annotations
 
+import html as _html
 import json
 import logging
 import random
@@ -25,8 +34,6 @@ import urllib.parse
 import urllib.robotparser
 from pathlib import Path
 from typing import Iterator
-
-import requests
 
 from .config import CACHE_DIR, Settings
 from .models import ComcListing
@@ -49,6 +56,8 @@ class ComcAccessError(RuntimeError):
 
 def robots_allowed(target_url: str, user_agent: str = BROWSER_UA) -> tuple[bool, str]:
     """Check COMC robots.txt for `user_agent`. Fails open (allowed) if it can't be read."""
+    import requests  # lazy: keep the parse-only path free of the requests dependency
+
     rp = urllib.robotparser.RobotFileParser()
     try:
         resp = requests.get(
@@ -150,39 +159,72 @@ def _parse_jsonld(html: str) -> list[ComcListing]:
     return out
 
 
-def _parse_dom(html: str) -> list[ComcListing]:
-    """Heuristic DOM scrape. Tune the selectors against a real COMC page."""
-    try:
-        from selectolax.parser import HTMLParser  # type: ignore
-    except Exception:
-        return _parse_dom_stdlib(html)
+# --- Real COMC browse-page DOM (reverse-engineered 2026-06-08) --------------
+# Each result is a `<div class="carddata">` block. The card-detail link in it carries
+# the set/number/name/condition in its path; price and stock live in the listprice markup.
+_CARDDATA_SPLIT = re.compile(r'<div\s+class="carddata"\s*>', re.IGNORECASE)
+# .../<year>/<set>/<number>/<name>/<id>/<Ungraded|Graded>/<source>/<condition>
+_DETAIL_URL_RE = re.compile(
+    r'href="(https?://(?:www\.)?comc\.com/Cards/Pokemon/'
+    r'([^"/]+)/([^"]+?)/([^"/]+)/([^"/]+)/(\d+)/(Ungraded|Graded)/([^"/]+)/([^"/]+))"',
+    re.IGNORECASE,
+)
+_DESC_RE = re.compile(r'<div\s+class="description"\s*>\s*(.*?)\s*</div>', re.DOTALL | re.IGNORECASE)
+_QTY_RE = re.compile(r'<div\s+class="qty"\s*>\s*(\d+)\s+from', re.IGNORECASE)
+_LISTPRICE_RE = re.compile(r'class="listprice', re.IGNORECASE)
 
-    tree = HTMLParser(html)
+
+def _clean(text: str) -> str:
+    """Decode HTML entities + collapse whitespace from a snippet of inner HTML."""
+    text = re.sub(r"<[^>]+>", " ", text or "")
+    return re.sub(r"\s+", " ", _html.unescape(text)).strip()
+
+
+def _deslug(segment: str) -> str:
+    """A COMC URL path segment -> human text ('Gary_Oak' / 'Farfetch%27d' -> 'Farfetch'd')."""
+    return _html.unescape(urllib.parse.unquote(segment or "")).replace("_", " ").strip()
+
+
+def _parse_dom(html: str) -> list[ComcListing]:
+    """Parse a real COMC browse page into listings (one per `carddata` block)."""
     out: list[ComcListing] = []
-    # COMC item links generally point at /Cards/.../<id> with the price rendered nearby.
-    for node in tree.css("a[href*='/Cards/']"):
-        href = node.attributes.get("href", "") or ""
-        text = node.text(strip=True)
-        if not text or "$" not in text:
+    blocks = _CARDDATA_SPLIT.split(html)
+    if len(blocks) <= 1:
+        return _parse_dom_loose(html)  # unfamiliar layout: best-effort fallback
+    for block in blocks[1:]:
+        m = _DETAIL_URL_RE.search(block)
+        if not m:
             continue
-        price = _to_float(text)
+        url, _year, set_seg, number_seg, name_seg, item_id, graded_seg, _src, cond_seg = m.groups()
+        # Price: the first $-amount in the listprice region (falls back to first in block).
+        lp = _LISTPRICE_RE.search(block)
+        price = _to_float(block[lp.end():] if lp else block)
         if price is None:
             continue
-        name = re.sub(r"\$\s?[0-9].*$", "", text).strip()
-        num_m = _NUM_RE.search(text)
-        url = href if href.startswith("http") else COMC_BASE + href
-        out.append(_listing_from_fields(
-            name or text, price, url, number_hint=num_m.group(1) if num_m else None,
-        ))
+        qty_m = _QTY_RE.search(block)
+        name = _deslug(name_seg)
+        set_hint = _deslug(set_seg)
+        condition = _deslug(cond_seg)  # e.g. "EX-NM"
+        listing = _listing_from_fields(
+            name, price, url, set_hint=set_hint, number_hint=_deslug(number_seg),
+            condition=condition, quantity=int(qty_m.group(1)) if qty_m else 1,
+        )
+        listing.item_id = item_id
+        # The URL says Ungraded/Graded explicitly; trust it over keyword sniffing.
+        if graded_seg.lower() == "graded" and not listing.graded:
+            listing.graded = True
+        desc = _DESC_RE.search(block)
+        if desc:  # carries set + printing/edition signal (1st Ed / Unlimited / Holo)
+            listing.description = _clean(desc.group(1))
+        out.append(listing)
     return out
 
 
-def _parse_dom_stdlib(html: str) -> list[ComcListing]:
-    """Last-resort parser using only the stdlib (no selectolax)."""
+def _parse_dom_loose(html: str) -> list[ComcListing]:
+    """Fallback for an unrecognized layout: any /Cards/ anchor with a $price nearby."""
     out: list[ComcListing] = []
     for m in re.finditer(r'<a[^>]+href="([^"]*/Cards/[^"]+)"[^>]*>(.*?)</a>', html, re.DOTALL | re.IGNORECASE):
-        href, inner = m.group(1), re.sub(r"<[^>]+>", " ", m.group(2))
-        inner = re.sub(r"\s+", " ", inner).strip()
+        href, inner = m.group(1), _clean(m.group(2))
         price = _to_float(inner)
         if price is None:
             continue
@@ -190,6 +232,10 @@ def _parse_dom_stdlib(html: str) -> list[ComcListing]:
         url = href if href.startswith("http") else COMC_BASE + href
         out.append(_listing_from_fields(name or inner, price, url))
     return out
+
+
+# Back-compat alias (older callers/tests referenced the stdlib parser by name).
+_parse_dom_stdlib = _parse_dom_loose
 
 
 def parse_page(html: str) -> list[ComcListing]:

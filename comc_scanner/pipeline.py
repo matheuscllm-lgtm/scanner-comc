@@ -10,7 +10,7 @@ from .config import Settings
 from .comc_scraper import ComcAccessError, ComcScraper, listings_from_json, parse_html_file
 from .matcher import match
 from .models import Deal
-from .normalize import normalize_set, set_aliases
+from .normalize import normalize_set, set_aliases, set_contains
 from .reporter import Reporter
 from .segments import ChunkCursor, TcgSet, select_sets, to_sets
 from .tcg_index import TcgIndex
@@ -105,7 +105,7 @@ class Scanner:
         if key in amap:
             return amap[key]
         for alias, ts in amap.items():
-            if alias and (alias in key or key in alias):
+            if set_contains(alias, key):
                 return ts
         return None
 

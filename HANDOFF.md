@@ -1,7 +1,7 @@
 # HANDOFF — Scanner de arbitragem COMC → TCGPlayer (Pokémon)
 
 > Documento de transferência para retomar o trabalho em uma nova sessão (inclusive via
-> Claude Code remoto no celular). Última atualização: 2026-06-08.
+> Claude Code remoto no celular). Última atualização: 2026-06-08 (sessão 2).
 
 ---
 
@@ -12,13 +12,21 @@
   (`> 20%`, sem preço mínimo), emitindo **resultados parciais ~a cada 1h** enquanto roda.
 - **Onde está:** branch **`claude/wizardly-maxwell-gnhfe3`**, **PR #1 (draft)**:
   https://github.com/matheuscllm-lgtm/scanner-comc/pull/1
-- **Build:** ✅ código completo e empurrado · ✅ **16/16 testes offline** · ✅ **CI verde**
+- **Build:** ✅ código completo e empurrado · ✅ **24/24 testes offline** · ✅ **CI verde**
   (`.github/workflows/tests.yml`, job `offline-tests`).
-- **Verificado ao vivo:** TCGCSV (217 sets, matching real), `dry-run` completo, `robots.txt`.
-- **NÃO verificado ao vivo:** a **raspagem da COMC** (o Cloudflare bloqueia o sandbox; precisa
-  de navegador real + seus cookies + ajuste dos seletores contra uma página real).
-- **Próximo passo que destrava tudo:** capturar **uma página real da COMC** e ajustar os
-  seletores (ver §6). É a única coisa que não pôde ser feita no ambiente isolado.
+- **Verificado ao vivo:** TCGCSV (217 sets, matching real), `dry-run` completo, `robots.txt`,
+  e **a raspagem + parsing da COMC contra páginas REAIS** (ver §6.1 / §10).
+- **✅ BLOQUEADOR PRINCIPAL RESOLVIDO (sessão 2, 2026-06-08):** os seletores da COMC foram
+  calibrados contra **3 capturas reais** obtidas via **Firecrawl (proxy `stealth`)** — não
+  precisou de Playwright/login/celular. O parser agora extrai **100/100 listagens** por página,
+  com `set_hint`, `number_hint`, `condition`, `price`, `quantity` e `item_id`. Fixture real
+  commitada em `tests/fixtures/comc_real_capture.html` + testes em `tests/test_parse_real.py`.
+- **🐞 BUG CRÍTICO encontrado e corrigido** com os dados reais: a resolução de set casava
+  **códigos curtos de set dentro de palavras** (`pr`⊂"printing", `em`⊂"pok**em**on"), fazendo
+  toda listagem Topps resolver para um set TCG aleatório e gerar **falsos positivos** (carta
+  Topps reportada como arbitragem TCG). Corrigido (ver §11). Sem o fix, a saída era lixo.
+- **Próximo passo recomendado:** trocar o fetch ao vivo (`iter_listings`) de Playwright para
+  **Firecrawl** — aí o scanner roda **headless, sem navegador/login/cookies** (ver §10).
 
 ---
 
@@ -117,36 +125,46 @@ Testes: `python -m pytest tests/` (são offline, sem rede).
   set inexistente sem match; CSV/JSON gravados; Sheets degradou p/ CSV sem credenciais.
 - ✅ **Subtype conservador**: Jungle Pikachu usa `Unlimited` ($6.28), não `1st Edition` ($28.58).
 - ✅ `robots.txt` da COMC lido ao vivo → **permite** nosso UA de navegador.
-- ✅ **16/16 testes offline** e **CI verde** no PR.
-- ✅ Novos comandos `parse-file` / `capture` / `dry-run --html` funcionam (no fixture placeholder).
+- ✅ **24/24 testes offline** e **CI verde** no PR.
+- ✅ Novos comandos `parse-file` / `capture` / `dry-run --html` funcionam.
+- ✅ **(sessão 2) Seletores da COMC calibrados contra páginas REAIS** via Firecrawl `stealth`:
+  parser extrai 100/100 listagens com `set_hint`/`number_hint`/`condition`/`price`/`qty`/`item_id`.
+  `dry-run --html` numa página real de Topps agora retorna **0 falsos positivos** (correto:
+  Topps não é TCG); o happy-path (Base Set Charizard 4/102 → Holo $614.49) segue casando.
+- ✅ **(sessão 2) Bug de falso-positivo na resolução de set corrigido** (§11).
 
-**Pendente (NÃO pôde ser feito no ambiente isolado):**
-- ❌ **Raspagem ao vivo da COMC**: o Cloudflare bloqueia o sandbox e não há display/cookies aqui.
-- ❌ **Seletores de listagem da COMC**: o DOM exato **não é público**; os seletores em
-  `comc_scraper.py` (`_parse_dom`/`_parse_jsonld`) são **best-effort** e precisam ser calibrados
-  contra uma página real — principalmente para extrair o **`set_hint`** (sem ele o match não casa).
+**Pendente:**
+- ❌ **Raspagem CONTÍNUA ao vivo**: `iter_listings` ainda usa Playwright (navegador). Para rodar
+  headless sem login, **migrar para Firecrawl** (§10) — capturas pontuais já funcionam por lá.
+- ⚠️ **CF intermitente em URLs de busca facetada** (`,=evolving+skies,`): a página de browse
+  simples passou de primeira; a busca por termo levou challenge ~3× seguidas. Ver §10.
 - ⛔ **Google Sheets real**: só degrada p/ CSV até configurar credenciais (`GSHEETS_*` no `.env`).
 
 ---
 
 ## 6. Os 2 pontos abertos e COMO resolver
 
-### 6.1 Seletores HTML da COMC (o bloqueador principal)
-A forma de resolver é **calibrar contra uma página real**. O ferramental já está no código:
+### 6.1 Seletores HTML da COMC — ✅ RESOLVIDO (sessão 2)
+Os seletores foram calibrados contra páginas reais. O **DOM verificado** de uma página de
+browse (`/Cards/Pokemon,...,i100,pN`) é: cada resultado é um `<div class="carddata">` e o
+link de detalhe carrega tudo no path —
 
-```bash
-# 1) Capturar uma página renderizada (logado, passando o Cloudflare):
-python -m comc_scanner capture --headful --out tests/fixtures/comc_sample.html \
-    --url "https://www.comc.com/Cards/Pokemon,sl,fb,aUngraded,rCOMC,gEX-NM,i100,p1"
-# 2) Ver o que o parser extrai (nome/preço/número/condição/set):
-python -m comc_scanner parse-file --html tests/fixtures/comc_sample.html
-# 3) Ajustar _parse_dom() em comc_scraper.py até extrair tudo (INCLUSIVE set_hint) e validar
-#    o pipeline completo (matching real vs preços do TCG) contra a página salva:
-python -m comc_scanner dry-run --era vintage --html tests/fixtures/comc_sample.html
 ```
-> `tests/fixtures/comc_sample.html` hoje é um **placeholder** (JSON-LD sintético). Substitua por
-> uma captura real. Se não conseguir rodar o `capture`, basta salvar o HTML da página pelo
-> navegador (ou colar o HTML de um card no chat) que dá pra ajustar os seletores.
+/Cards/Pokemon/<ano>/<Set_Name>/<Numero>/<Card_Name>/<id>/<Ungraded|Graded>/<COMC>/<Condição>
+ex.: /Cards/Pokemon/1999/Topps_..._Series_1_-_Base/TV8/Gary_Oak/4341265/Ungraded/COMC/EX-NM
+```
+
+`_parse_dom` (em `comc_scraper.py`) segmenta por `carddata`, lê set/número/nome/condição do
+path do link, e o preço/quantidade do markup `listprice`/`qty`. Sem `selectolax` (regex pura).
+
+Loop de validação (continua válido para re-calibrar se a COMC mudar o HTML):
+```bash
+python -m comc_scanner parse-file --html tests/fixtures/comc_real_capture.html   # 100 listagens
+python -m comc_scanner dry-run --era all --html tests/fixtures/comc_real_capture.html --no-sheets
+```
+> `tests/fixtures/comc_real_capture.html` = captura REAL commitada (página de Topps, 100 cards).
+> `tests/fixtures/comc_sample.html` = placeholder JSON-LD sintético (mantido só p/ back-compat).
+> `tests/test_parse_real.py` trava a estrutura: se a COMC mudar o DOM, a CI quebra aqui.
 
 ### 6.2 Termos de Uso da COMC
 - **robots.txt (boa notícia):** a COMC **permite** user-agents comuns (`User-agent: *` →
@@ -196,3 +214,61 @@ python -m comc_scanner dry-run --era vintage --html tests/fixtures/comc_sample.h
 
 (Se for raspar de verdade: rode `playwright install chromium`, ponha `COMC_SESSION_COOKIE`
 no `.env`, e teste com `once --era recent --max-sets-per-chunk 1` antes do `run`.)
+
+---
+
+## 10. Como as páginas reais foram obtidas (Firecrawl, sem navegador) — sessão 2
+
+O Cloudflare bloqueia GET simples, mas o **Firecrawl com `proxy: stealth`** entrega o HTML
+renderizado da COMC **sem Playwright, sem login, sem cookies** (mesma rota que furou a OLX no
+sealed scanner). Foi assim que as 3 capturas reais saíram. Reproduzir:
+
+```
+firecrawl_scrape(
+  url="https://www.comc.com/Cards/Pokemon,sh,fb,aUngraded,rCOMC,gEX-NM,i100,p1",
+  formats=["rawHtml"], proxy="stealth", waitFor=12000, onlyMainContent=false)
+```
+O `rawHtml` vem dentro de um wrapper JSON (`{"rawHtml": "..."}`) — extrair com `json.loads`.
+
+**Observações importantes:**
+- A **página de browse simples** (sem termo de busca) passou de primeira. A **busca facetada
+  por termo** (`,=evolving+skies,`) levou Cloudflare challenge ~3× seguidas — é mais vigiada.
+  Para um set específico, tente algumas vezes, alterne `proxy` (`stealth`→`auto`), ou use a
+  rota Playwright logada.
+- **Próximo passo de maior alavancagem:** reescrever `ComcScraper.iter_listings` para buscar via
+  Firecrawl (`/scrape` por página) em vez de Playwright. Aí o `run`/`once` rodam headless neste
+  ambiente, sem instalar Chromium nem `COMC_SESSION_COOKIE`. O parser (`parse_page`) já está
+  pronto para o HTML real — só falta trocar a fonte do HTML. (Atenção ao CF intermitente acima:
+  adicionar retry/backoff por página.)
+
+**Descoberta de escopo:** a categoria `/Cards/Pokemon` da COMC é **muito mais ampla que o TCG
+Pokémon** — está cheia de Topps, Bandai, Topsun, Burger King, stickers Marumiya, etc., que **não
+existem no TCGCSV**. Por isso uma varredura genérica casa pouco (e deve mesmo). Para achar
+arbitragem TCG de verdade, **mire nos nomes de set TCG reais** (busca por termo / `--sets`),
+não na categoria inteira.
+
+---
+
+## 11. Bug de falso-positivo na resolução de set (corrigido, sessão 2)
+
+**Sintoma:** `dry-run` numa página real de Topps gerava ~30 "deals" com confiança 0.90–0.95 —
+cartas Topps (Gary Oak, Zubat…) reportadas como cartas TCG (Leafeon 24/100, Water Energy…).
+
+**Causa raiz (dois níveis):**
+1. **Resolução de set frouxa.** `_resolve_tset` (pipeline) e `TcgIndex.resolve_set` faziam
+   `alias in key or key in alias` — substring cru. Códigos de set de 2–3 chars casavam **dentro
+   de palavras**: `pr`⊂"1st **pr**inting", `em`⊂"pok**em**on", `ma`⊂"ani**ma**tion". Resultado:
+   toda listagem Topps resolvia para um set TCG aleatório (o primeiro na ordem do dict).
+2. **Tier 1 sem checagem de nome.** Com set errado resolvido, um número que por acaso existisse
+   naquele set casava no Tier 1 (set+número único, conf 0.95) **sem olhar o nome** → deal falso.
+
+**Correção (mínima e cirúrgica):**
+- `normalize.set_contains(a, b)`: containment só por **fronteira de palavra** (`\b`) e exige
+  ≥ 4 chars; códigos curtos só resolvem por **igualdade exata**. Usado nos dois resolvers.
+- `matcher.match`: Tier 1 agora exige um **piso de afinidade de nome** (`fuzzy ≥ 45`) mesmo no
+  match único set+número — bloqueia "set errado + número coincidente + nome alheio".
+- Bônus: `subtype_hint` agora também lê `set_hint` + `description` (a edição 1st Ed/Unlimited/Holo
+  vive no nome do set, não no nome limpo da carta).
+
+**Validação:** página Topps real → **0 deals** (correto); happy-path sintético (Base/Jungle) →
+casa certo com preços/subtypes corretos; **24/24 testes**. Travado por `tests/test_parse_real.py`.

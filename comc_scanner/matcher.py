@@ -35,7 +35,10 @@ def _build_deal(
     listing: ComcListing, card: TcgCard, index: TcgIndex, settings: Settings,
     confidence: float, reason: str,
 ) -> Deal | None:
-    prefer = subtype_hint(listing.raw_name, listing.condition, card.product.rarity)
+    # Edition/foil signal lives in the COMC set name + description, not the clean card
+    # name, so feed those in too (e.g. "...- Base - 1st Edition", "Reverse Holofoil").
+    signal = " ".join(filter(None, (listing.raw_name, listing.set_hint, listing.description)))
+    prefer = subtype_hint(signal, listing.condition, card.product.rarity)
     ref = index.reference_price(card, prefer)
     if ref is None:
         return None
@@ -66,18 +69,25 @@ def match(
     norm_name = normalize_name(listing.raw_name)
     number_key = parse_number(listing.number_hint)
 
-    # Tier 1: exact set + number
+    # Tier 1: exact set + number. A unique set+number is normally decisive, but a
+    # mis-resolved set + a coincidental number must not pass with a wildly different
+    # name (real COMC "Pokemon" listings include Topps/Bandai/etc. whose set strings
+    # can resolve loosely). Require a minimal name affinity as a sanity floor.
+    _NAME_FLOOR = 45.0
     if number_key:
         exact = index.by_set_number.get((set_key, number_key))
         if exact:
             if len(exact) == 1:
-                return _build_deal(listing, exact[0], index, settings, 0.95, "set+number exact")
-            card, score, _ = _best_name(exact, norm_name)
-            if card is not None:
-                return _build_deal(
-                    listing, card, index, settings, 0.90,
-                    f"set+number, disambiguated by name {score:.0f}",
-                )
+                score = fuzzy_ratio(norm_name, normalize_name(exact[0].product.name))
+                if not norm_name or score >= _NAME_FLOOR:
+                    return _build_deal(listing, exact[0], index, settings, 0.95, "set+number exact")
+            else:
+                card, score, _ = _best_name(exact, norm_name)
+                if card is not None and score >= _NAME_FLOOR:
+                    return _build_deal(
+                        listing, card, index, settings, 0.90,
+                        f"set+number, disambiguated by name {score:.0f}",
+                    )
 
     candidates = index.by_set.get(set_key, [])
     if not candidates:

@@ -51,6 +51,24 @@ def normalize_set(s: str) -> str:
     return _basic(raw)
 
 
+def set_contains(a: str, b: str) -> bool:
+    """Word-boundary containment for the set-resolution *fallback*.
+
+    True when the shorter of the two normalized strings occurs as whole word(s)
+    inside the longer. Requires >= 4 chars so short set codes (``pr``/``em``/``sv``)
+    can't match *inside* unrelated words — e.g. ``pr`` in "1st printing" or ``em`` in
+    "pokemon" used to make every Topps listing resolve to a random TCG set. Short codes
+    still resolve via exact-key equality, which callers check before this fallback.
+    """
+    a, b = (a or "").strip(), (b or "").strip()
+    if not a or not b:
+        return False
+    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
+    if len(shorter) < 4:
+        return False
+    return re.search(rf"\b{re.escape(shorter)}\b", longer) is not None
+
+
 def set_aliases(tcg_set_name: str) -> set[str]:
     """All normalized forms a COMC set string might take for this TCG set."""
     raw = _strip_accents(tcg_set_name or "").lower()

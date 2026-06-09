@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from .models import TcgCard, TcgPrice, TcgProduct
-from .normalize import normalize_set, parse_number, set_aliases
+from .normalize import normalize_set, parse_number, set_aliases, set_contains
 
 # Subtype preference order when a hint is unavailable / missing. Common/cheaper
 # print runs first so we never overstate margin by defaulting to a pricier 1st Edition.
@@ -53,9 +53,9 @@ class TcgIndex:
             return key
         if key in self.set_name_index:
             return self.set_name_index[key]
-        # loose containment match against known aliases
+        # word-boundary containment fallback (short codes excluded; see set_contains)
         for alias, canonical in self.set_name_index.items():
-            if alias and (alias in key or key in alias):
+            if set_contains(alias, key):
                 return canonical
         return None
 

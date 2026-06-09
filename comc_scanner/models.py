@@ -50,6 +50,7 @@ class ComcListing:
     seller: str | None = None
     image_url: str | None = None
     item_id: str | None = None
+    description: str = ""  # full COMC description line (set + printing/edition signal)
 
 
 @dataclass(slots=True)
