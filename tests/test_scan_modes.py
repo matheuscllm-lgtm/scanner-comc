@@ -58,6 +58,19 @@ def test_condition_filter_keeps_nm_range_only():
         assert sc._condition_ok(_listing(bad)) is False, bad
 
 
+def test_variant_filter_drops_foreign_language_printings():
+    sc = Scanner(_settings())
+    en = ComcListing(raw_name="Pikachu", price=1.0, url="",
+                     set_hint="Pokemon Scarlet Violet - 151 sv2a - Base")
+    kr = ComcListing(raw_name="Pikachu", price=1.0, url="",
+                     set_hint="Pokemon Scarlet Violet - 151 sv2a - Base - Korean")
+    jp = ComcListing(raw_name="Art Rare - Squirtle", price=1.0, url="",
+                     set_hint="Pokemon Scarlet Violet - 151 sv2a - Base - Japanese")
+    assert sc._variant_ok(en) is True
+    assert sc._variant_ok(kr) is False
+    assert sc._variant_ok(jp) is False
+
+
 def test_condition_allowlist_is_configurable():
     sc = Scanner(_settings(comc_condition_allow=("nm",)))
     assert sc._condition_ok(_listing("NM")) is True

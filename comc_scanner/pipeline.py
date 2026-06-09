@@ -228,7 +228,7 @@ class Scanner:
                             for L in listings:
                                 if L.graded and not self.settings.comc_include_graded:
                                     continue
-                                if not self._condition_ok(L):
+                                if not self._condition_ok(L) or not self._variant_ok(L):
                                     continue
                                 deal = match(L, index, self.settings, context_set_key=ctx)
                                 if deal:
@@ -333,7 +333,7 @@ class Scanner:
                         self._harvest_slug(L, catalog)
                         if L.graded and not self.settings.comc_include_graded:
                             continue
-                        if not self._condition_ok(L):
+                        if not self._condition_ok(L) or not self._variant_ok(L):
                             continue
                         deal = match(L, index, self.settings)
                         if deal:
@@ -388,6 +388,13 @@ class Scanner:
         An empty/unknown condition is dropped (conservative — don't compare unknown to NM)."""
         cond = (listing.condition or "").strip().lower()
         return cond in self.settings.comc_condition_allow
+
+    def _variant_ok(self, listing) -> bool:
+        """English-only: drop foreign-language sub-printings (Japanese/Korean/...) whose
+        set string names another language — TCGCSV prices are the English product, so a
+        JP/KR card vs the EN price is a false signal."""
+        blob = f"{listing.set_hint or ''} {listing.raw_name or ''}".lower()
+        return not any(v in blob for v in self.settings.comc_exclude_variants)
 
     @staticmethod
     def _harvest_slug(listing, catalog: dict) -> None:
@@ -479,7 +486,7 @@ class Scanner:
                             for L in listings:
                                 if L.graded and not self.settings.comc_include_graded:
                                     continue
-                                if not self._condition_ok(L):
+                                if not self._condition_ok(L) or not self._variant_ok(L):
                                     continue
                                 deal = match(L, index, self.settings, context_set_key=ctx)
                                 if deal:

@@ -76,7 +76,11 @@ class Deal:
             "card": self.product.name,
             "number": self.product.number or "",
             # Pokémon name followed by its collector number, e.g. "Pikachu 173/165".
-            "card_number": f"{self.product.name} {self.product.number or ''}".strip(),
+            # Some TCGCSV product names already embed the number — avoid doubling it.
+            "card_number": (
+                self.product.name if (self.product.number or "") in self.product.name
+                else f"{self.product.name} {self.product.number or ''}".strip()
+            ),
             "set": self.product.set_name,
             "rarity": self.product.rarity or "",
             "condition": self.listing.condition,

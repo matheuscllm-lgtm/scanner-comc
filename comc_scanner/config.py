@@ -87,6 +87,14 @@ class Settings:
     # by the per-listing condition (from the card URL). Keep only these (lowercased) — the
     # NM-range top raw grades. Comparing a played card to the NM TCG price would inflate margin.
     comc_condition_allow: tuple[str, ...] = ("nm", "mint", "m", "ex-nm", "exnm", "near mint")
+    # English-only: COMC set-path browse returns every language sub-printing (Japanese,
+    # Korean, ...) of a set, but TCGCSV prices are the ENGLISH product — matching a JP/KR
+    # card to the EN price is a false signal. Drop listings whose set string names another
+    # language. (Set COMC_EXCLUDE_VARIANTS="" to disable.)
+    comc_exclude_variants: tuple[str, ...] = (
+        "japanese", "korean", "german", "spanish", "french", "italian",
+        "chinese", "portuguese", "thai", "indonesian",
+    )
     # Browse sort: "sh" (highest price first) surfaces valuable NM cards + big-$ arbitrage
     # on the first pages — better than "sl" once we filter to NM-only (cheapest pages are
     # all played commons that get dropped). "sl" = lowest first.
@@ -147,6 +155,12 @@ def load_settings(env_file: Path | None = None) -> Settings:
             c.strip().lower() for c in _get(
                 "COMC_CONDITION_ALLOW", "nm,mint,m,ex-nm,exnm,near mint"
             ).split(",") if c.strip()
+        ),
+        comc_exclude_variants=tuple(
+            v.strip().lower() for v in _get(
+                "COMC_EXCLUDE_VARIANTS",
+                "japanese,korean,german,spanish,french,italian,chinese,portuguese,thai,indonesian",
+            ).split(",") if v.strip()
         ),
         comc_request_delay_s=_get_float("COMC_REQUEST_DELAY_SECONDS", 4.0),
         comc_headless=_get_bool("COMC_BROWSER_HEADLESS", True),
