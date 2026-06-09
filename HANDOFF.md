@@ -17,9 +17,21 @@ python -m comc_scanner targeted --era vintage --no-sheets   # WotC (yield fino)
 Evolved, Obsidian Flames, Surging Sparks). Modern rende MUITO mais (SV 151 → ~18 deals NM
 conf 0.95; ex. Squirtle 170/165 $37→$116). Vintage rende ~1/15 sets (mercado same-US fino).
 
-**⛔ BLOQUEIO ATUAL: créditos Firecrawl ESGOTADOS** (no fim do overnight). Sem créditos, NENHUM
-scan ao vivo roda (o fetch falha alto, não fabrica). Recarregar/reciclar billing Firecrawl pra
-voltar a rodar.
+**✅ DOIS transportes agora (Firecrawl OU navegador local grátis):**
+- **Firecrawl** (`COMC_FETCH_MODE=firecrawl`, default): rápido, headless, sem navegador — mas
+  **créditos esgotaram** no overnight (402). Recarregar billing pra voltar a usar.
+- **Playwright/patchright local (GRÁTIS, sem crédito)** — implementado 2026-06-09 a pedido do
+  operador. Comando:
+  ```
+  python -m comc_scanner targeted --era recent --fetch-mode playwright
+  ```
+  Provado ao vivo: SV 151 → 9 deals NM ≥20% (Squirtle 170/165 $37→$116), **zero crédito**.
+  **Como funciona / requisitos:** patchright + Chrome real + **headful** (auto-resolve o
+  Cloudflare Turnstile, sem clique humano; num server roda em display virtual). É forçado
+  headful automaticamente. Perfil persistente em `.cache/pw_profile_comc` guarda o cf_clearance
+  (`warm` opcional pra pré-aquecer: `python -m comc_scanner warm`). **NÃO serve pro GH Actions**
+  (cloud sem display/Chrome) — lá use Firecrawl. Caveat: a página `sh` modern mistura subsets
+  Korean/variante — futura melhoria: filtrar só o base EN.
 
 **AÇÕES DO OPERADOR (quando puder):**
 1. Recarregar créditos Firecrawl (desbloqueia scans + validação).
