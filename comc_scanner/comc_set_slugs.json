@@ -1,0 +1,29 @@
+{
+  "_meta": {
+    "description": "TCGCSV/TCGplayer set name -> COMC {year, slug} for vintage WotC-era Pokemon sets. Used to build the COMC set-path browse URL: https://www.comc.com/Cards/Pokemon/<year>/<slug>,sl,fb,aUngraded,rCOMC,i100,p1",
+    "comc_count_note": "comc_count is the ungraded listing count from searchResultsStats WITHOUT the rCOMC repository filter (i.e. aUngraded only). IMPORTANT: the verified scanner URL uses ',rCOMC' which restricts to COMC's own RCR consignment repository -- that repository is essentially EMPTY for vintage WotC ungraded (every set returned 0-1 listings under rCOMC). The real ungraded inventory lives under the other seller repositories (rOther / rCOMC_CCG). To actually see these listings the scanner should drop the rCOMC filter (use ',aUngraded,' alone) or query the seller repos. All slugs below were confirmed real either way (page title resolves to the exact set, no Cloudflare challenge, card-detail links share the slug).",
+    "slug_patterns": {
+      "wotc_classic": "Pokemon_<SetName>_-_Base  (spaces->underscores). The '[Base]' bracket in the display name becomes '_-_Base' in the slug. English Unlimited is the plain '_-_Base'; variants append a suffix: '_-_1st_Edition', '_-_Shadowless', '_-_Spanish', '_-_German', '_-_Reverse_Foil'.",
+      "neo_revelation_quirk": "Neo Revelation is named 'Pokemon - Neo Revelation' on COMC, so its slug has an extra leading '_-_': Pokemon_-_Neo_Revelation_-_Base. The other three Neo sets use the normal Pokemon_Neo_<Name>_-_Base form.",
+      "ecard_series": "e-Card sets (Expedition/Aquapolis/Skyridge) are grouped under 'e-Card Series': Pokemon_e-Card_Series_-_<Name>_-_Base. Skyridge/Aquapolis also have '_-_German' and '_-_Reverse_Foil' sibling slugs; pick the plain '_-_Base'.",
+      "years": "Base/Jungle/Fossil=1999; Base Set 2/Team Rocket/Gym Heroes/Gym Challenge/Neo Genesis=2000; Neo Discovery/Neo Revelation=2001; Neo Destiny/Legendary Collection/Expedition=2002; Aquapolis/Skyridge=2003."
+    },
+    "validated_at": "2026-06-08",
+    "validation_filter_used": "aUngraded (rCOMC dropped to expose real inventory)"
+  },
+  "Base Set": {"year": "1999", "slug": "Pokemon_Base_Set_-_Base", "comc_count": 325, "validated": true},
+  "Jungle": {"year": "1999", "slug": "Pokemon_Jungle_-_Base", "comc_count": 200, "validated": true},
+  "Fossil": {"year": "1999", "slug": "Pokemon_Fossil_-_Base", "comc_count": 210, "validated": true},
+  "Base Set 2": {"year": "2000", "slug": "Pokemon_Base_Set_2_-_Base", "comc_count": 318, "validated": true},
+  "Team Rocket": {"year": "2000", "slug": "Pokemon_Team_Rocket_-_Base", "comc_count": 213, "validated": true},
+  "Gym Heroes": {"year": "2000", "slug": "Pokemon_Gym_Heroes_-_Base", "comc_count": 217, "validated": true},
+  "Gym Challenge": {"year": "2000", "slug": "Pokemon_Gym_Challenge_-_Base", "comc_count": 184, "validated": true},
+  "Neo Genesis": {"year": "2000", "slug": "Pokemon_Neo_Genesis_-_Base", "comc_count": 242, "validated": true},
+  "Neo Discovery": {"year": "2001", "slug": "Pokemon_Neo_Discovery_-_Base", "comc_count": 122, "validated": true},
+  "Neo Revelation": {"year": "2001", "slug": "Pokemon_-_Neo_Revelation_-_Base", "comc_count": 88, "validated": true, "note": "COMC names this set 'Pokemon - Neo Revelation' (extra leading dash), so slug differs from the other Neo sets."},
+  "Neo Destiny": {"year": "2002", "slug": "Pokemon_Neo_Destiny_-_Base", "comc_count": 134, "validated": true},
+  "Legendary Collection": {"year": "2002", "slug": "Pokemon_Legendary_Collection_-_Base", "comc_count": 164, "validated": true},
+  "Expedition": {"year": "2002", "slug": "Pokemon_e-Card_Series_-_Expedition_-_Base", "comc_count": 131, "validated": true},
+  "Aquapolis": {"year": "2003", "slug": "Pokemon_e-Card_Series_-_Aquapolis_-_Base", "comc_count": 78, "validated": true},
+  "Skyridge": {"year": "2003", "slug": "Pokemon_e-Card_Series_-_Skyridge_-_Base", "comc_count": 35, "validated": true}
+}

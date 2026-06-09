@@ -99,7 +99,12 @@ def build_browse_url(
     segments.append("sl")  # sort: lowest price first
     segments.append("fb")  # Buy-It-Now only
     segments.append("aGraded" if settings.comc_include_graded else "aUngraded")
-    segments.append("rCOMC")  # COMC-noted condition source
+    # Seller-repository filter. `rCOMC` (COMC's RCR consignment repo) is ESSENTIALLY EMPTY
+    # for vintage WotC ungraded — restricting to it makes the scanner find nothing. Default
+    # to no r-filter so all seller repos (rOther/rCOMC_CCG/...) are seen. Set
+    # COMC_SELLER_REPO=COMC to opt back in.
+    if settings.comc_seller_repo:
+        segments.append("r" + settings.comc_seller_repo)
     if settings.comc_condition_band:
         segments.append("g" + settings.comc_condition_band)
     segments.append(f"i{items}")

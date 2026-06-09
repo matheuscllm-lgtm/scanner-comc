@@ -82,6 +82,7 @@ class Settings:
     comc_session_cookie: str = ""
     comc_condition_band: str = "EX-NM"
     comc_include_graded: bool = False
+    comc_seller_repo: str = ""  # "" = all repos; "COMC" = RCR only (empty for vintage)
     comc_request_delay_s: float = 4.0
     comc_headless: bool = True
     # Fetch transport: "firecrawl" (headless, no browser/login — clears Cloudflare via
@@ -129,6 +130,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         comc_session_cookie=_get("COMC_SESSION_COOKIE"),
         comc_condition_band=_get("COMC_CONDITION_BAND", "EX-NM"),
         comc_include_graded=_get_bool("COMC_INCLUDE_GRADED", False),
+        comc_seller_repo=_get("COMC_SELLER_REPO", ""),
         comc_request_delay_s=_get_float("COMC_REQUEST_DELAY_SECONDS", 4.0),
         comc_headless=_get_bool("COMC_BROWSER_HEADLESS", True),
         comc_fetch_mode=(_get("COMC_FETCH_MODE", "firecrawl") or "firecrawl").lower(),
