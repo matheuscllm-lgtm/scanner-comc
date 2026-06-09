@@ -6,8 +6,9 @@ import re
 import signal
 import time
 
-from .config import Settings
+from .config import CACHE_DIR, Settings
 from .comc_scraper import ComcAccessError, ComcScraper, listings_from_json, parse_html_file
+from .firecrawl_client import ComcBlockedError
 from .matcher import match
 from .models import Deal
 from .normalize import normalize_set, set_aliases, set_contains
@@ -194,6 +195,7 @@ class Scanner:
         next_flush = time.time() + self.settings.scan_interval_s
         completed = start
 
+        consecutive_blocked = 0  # circuit breaker: bail if CF blocks set after set
         try:
             with ComcScraper(self.settings) as scraper:
                 for offset, ts in enumerate(chunk):
@@ -202,28 +204,47 @@ class Scanner:
                     ctx = normalize_set(ts.name)
                     page_start = cursor.page if set_index == start else 1
                     last_page = page_start - 1
-                    for page_no, listings in scraper.iter_listings(
-                        term, max_pages=self.settings.max_pages_per_set, start_page=page_start
-                    ):
-                        for L in listings:
-                            if L.graded and not self.settings.comc_include_graded:
-                                continue
-                            deal = match(L, index, self.settings, context_set_key=ctx)
-                            if deal:
-                                deal.era = ts.era
-                                best.add(deal, gate, thr)
-                        last_page = page_no
-                        if time.time() >= next_flush:
+                    set_yielded = False
+                    try:
+                        for page_no, listings in scraper.iter_listings(
+                            term, max_pages=self.settings.max_pages_per_set, start_page=page_start
+                        ):
+                            set_yielded = True
+                            for L in listings:
+                                if L.graded and not self.settings.comc_include_graded:
+                                    continue
+                                deal = match(L, index, self.settings, context_set_key=ctx)
+                                if deal:
+                                    deal.era = ts.era
+                                    best.add(deal, gate, thr)
+                            last_page = page_no
+                            if time.time() >= next_flush:
+                                self.reporter.flush(best.qualifying(), era, best.low_conf())
+                                next_flush += self.settings.scan_interval_s
+                            if self._stop or (deadline and time.monotonic() >= deadline):
+                                cursor.next_set_index = set_index
+                                cursor.page = last_page + 1
+                                cursor.save()
+                                self.reporter.flush(best.qualifying(), era, best.low_conf())
+                                log.info("Budget/stop hit; cursor saved at set %d page %d.",
+                                         set_index, cursor.page)
+                                return best
+                    except ComcBlockedError:
+                        consecutive_blocked += 1
+                        log.warning("COMC set '%s' blocked by Cloudflare (%d in a row).",
+                                    ts.name, consecutive_blocked)
+                        if consecutive_blocked >= 3:
+                            log.error(
+                                "Cloudflare blocked %d sets in a row; aborting chunk to avoid "
+                                "burning Firecrawl credits. The faceted text-search URL is "
+                                "CF-sensitive — use a set-path/broad strategy or playwright mode.",
+                                consecutive_blocked,
+                            )
                             self.reporter.flush(best.qualifying(), era, best.low_conf())
-                            next_flush += self.settings.scan_interval_s
-                        if self._stop or (deadline and time.monotonic() >= deadline):
-                            cursor.next_set_index = set_index
-                            cursor.page = last_page + 1
-                            cursor.save()
-                            self.reporter.flush(best.qualifying(), era, best.low_conf())
-                            log.info("Budget/stop hit; cursor saved at set %d page %d.",
-                                     set_index, cursor.page)
                             return best
+                        continue  # skip this set, try the next
+                    if set_yielded:
+                        consecutive_blocked = 0
                     completed = set_index + 1
                     cursor.next_set_index = completed
                     cursor.page = 1
@@ -232,8 +253,9 @@ class Scanner:
                         break
         except ImportError:
             log.error(
-                "Playwright is required for live COMC scanning. Install with:\n"
-                "    pip install -r requirements.txt && playwright install chromium"
+                "Playwright was requested (--fetch-mode playwright) but is not installed. "
+                "Install it (pip install -r requirements.txt && playwright install chromium) "
+                "or use the default firecrawl mode (headless, no browser)."
             )
             return best
         except ComcAccessError as exc:
@@ -245,6 +267,111 @@ class Scanner:
             cursor.clear()
             log.info("Era '%s' sweep complete.", era)
         return best
+
+    def run_broad(self, era: str = "all", resume: bool = True) -> BestDeals:
+        """Headless functional scan: paginate the plain (CF-friendly) COMC browse and keep
+        only listings the matcher resolves to a TCG set in `era`'s index.
+
+        COMC's faceted TEXT-search URL is reliably Cloudflare-challenged, but the plain
+        browse clears it. So instead of searching per-set, we sweep the price-sorted browse
+        and let the matcher filter to real TCG cards. Set slugs seen are harvested to
+        `.cache/comc_set_catalog.json` to enable an efficient set-path mode later.
+        """
+        groups = self.client.groups()
+        all_sets = select_sets(groups, self.settings, era)
+        index = TcgIndex()
+        self._ensure_index(all_sets, index)
+        log.info("Broad sweep: %d TCG sets in '%s' index loaded; sweeping COMC browse.",
+                 len(all_sets), era)
+
+        page_cursor = CACHE_DIR / f"broad_{era}_page.txt"
+        start_page = 1
+        if resume and page_cursor.exists():
+            try:
+                start_page = max(1, int(page_cursor.read_text().strip()))
+            except ValueError:
+                start_page = 1
+
+        best = BestDeals(self.settings.top_n)
+        gate, thr = self.settings.min_match_confidence, self.settings.min_gross_margin
+        deadline = (time.monotonic() + self.settings.max_run_seconds) if self.settings.max_run_seconds else None
+        next_flush = time.time() + self.settings.scan_interval_s
+        catalog = self._load_catalog()
+        seen_listings = matched = 0
+
+        try:
+            with ComcScraper(self.settings) as scraper:
+                for page_no, listings in scraper.iter_listings(
+                    search_term=None, max_pages=self.settings.max_pages_per_set,
+                    start_page=start_page,
+                ):
+                    for L in listings:
+                        seen_listings += 1
+                        self._harvest_slug(L, catalog)
+                        if L.graded and not self.settings.comc_include_graded:
+                            continue
+                        deal = match(L, index, self.settings)
+                        if deal:
+                            matched += 1
+                            deal.era = era
+                            best.add(deal, gate, thr)
+                    page_cursor.write_text(str(page_no + 1), encoding="utf-8")
+                    if time.time() >= next_flush:
+                        self.reporter.flush(best.qualifying(), era, best.low_conf())
+                        self._save_catalog(catalog)
+                        next_flush += self.settings.scan_interval_s
+                    if self._stop or (deadline and time.monotonic() >= deadline):
+                        log.info("Broad sweep budget/stop at page %d (%d seen, %d matched).",
+                                 page_no, seen_listings, matched)
+                        break
+        except ComcBlockedError:
+            log.error("Cloudflare blocked the plain COMC browse via Firecrawl — unusual "
+                      "(the browse normally clears). Likely an account/egress-level block; "
+                      "aborting to avoid burning credits.")
+        except ComcAccessError as exc:
+            log.error("COMC access blocked: %s", exc)
+
+        self._save_catalog(catalog)
+        self.reporter.flush(best.qualifying(), era, best.low_conf())
+        log.info("Broad sweep done: %d listings seen, %d matched to TCG, %d catalog sets.",
+                 seen_listings, matched, len(catalog))
+        return best
+
+    # --- slug catalog (groundwork for an efficient set-path mode) --------
+    def _catalog_path(self):
+        return CACHE_DIR / "comc_set_catalog.json"
+
+    def _load_catalog(self) -> dict:
+        import json
+        p = self._catalog_path()
+        if p.exists():
+            try:
+                return json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                return {}
+        return {}
+
+    def _save_catalog(self, catalog: dict) -> None:
+        import json
+        p = self._catalog_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(catalog, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    @staticmethod
+    def _harvest_slug(listing, catalog: dict) -> None:
+        """Record the COMC (year, slug) for a listing's set, keyed by set_hint."""
+        import re
+        if not listing.set_hint or not listing.url:
+            return
+        m = re.search(r"/Cards/Pokemon/(\d{4})/([^/]+)/", listing.url)
+        if not m:
+            return
+        key = listing.set_hint
+        entry = catalog.get(key)
+        if entry is None:
+            catalog[key] = {"year": m.group(1), "slug": m.group(2), "count": 1}
+        else:
+            entry["count"] = entry.get("count", 0) + 1
 
     def run_loop(self, era: str) -> None:
         while not self._stop:

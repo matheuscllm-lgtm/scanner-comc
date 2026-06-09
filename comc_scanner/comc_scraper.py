@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Iterator
 
 from .config import CACHE_DIR, Settings
+from .firecrawl_client import ComcBlockedError
 from .models import ComcListing
 from .normalize import detect_graded
 
@@ -411,6 +412,10 @@ class ComcScraper:
             url = build_browse_url(self.settings, search_term=search_term, page=page_no)
             try:
                 listings = parse_page(self._fetch_html(url))
+            except ComcBlockedError:
+                # Distinct from a genuine empty page: let the caller count consecutive
+                # blocks and trip a circuit breaker (avoids burning credits on a hard block).
+                raise
             except Exception as exc:  # noqa: BLE001 — one set must not kill the sweep
                 log.warning("COMC page %s failed (%s); stopping this set.", page_no, exc)
                 break

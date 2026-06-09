@@ -74,6 +74,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(p_once)
     p_once.add_argument("--restart", action="store_true", help="ignore saved cursor")
 
+    p_broad = sub.add_parser(
+        "broad", help="headless functional scan: sweep the plain COMC browse, keep TCG matches"
+    )
+    _add_common(p_broad)
+    p_broad.add_argument("--restart", action="store_true", help="ignore saved page cursor")
+
     p_refresh = sub.add_parser("refresh-prices", help="force re-download the TCGCSV snapshot")
     _add_common(p_refresh)
 
@@ -118,6 +124,8 @@ def main(argv: list[str] | None = None) -> int:
         scanner.capture(url, args.out)
     elif args.command == "once":
         scanner.run_once(era, resume=not args.restart)
+    elif args.command == "broad":
+        scanner.run_broad(era, resume=not args.restart)
     elif args.command == "run":
         if args.restart:
             from .segments import ChunkCursor
