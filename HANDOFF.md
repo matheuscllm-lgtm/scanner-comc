@@ -5,6 +5,36 @@
 
 ---
 
+## 0-ter. RESUMO DA MANHÃ (overnight 2026-06-08→09) — ✅ funcional + útil
+
+**Estado:** scanner **funcionante, headless, testado (37), com CI verde e agendador**.
+Rode assim (o comando que entrega deals):
+```
+python -m comc_scanner targeted --era recent --no-sheets   # MODERN (melhor yield)
+python -m comc_scanner targeted --era vintage --no-sheets   # WotC (yield fino)
+```
+**O que funciona agora:** 19 sets validados no catálogo = 15 WotC + **4 modern** (151, Paldea
+Evolved, Obsidian Flames, Surging Sparks). Modern rende MUITO mais (SV 151 → ~18 deals NM
+conf 0.95; ex. Squirtle 170/165 $37→$116). Vintage rende ~1/15 sets (mercado same-US fino).
+
+**⛔ BLOQUEIO ATUAL: créditos Firecrawl ESGOTADOS** (no fim do overnight). Sem créditos, NENHUM
+scan ao vivo roda (o fetch falha alto, não fabrica). Recarregar/reciclar billing Firecrawl pra
+voltar a rodar.
+
+**AÇÕES DO OPERADOR (quando puder):**
+1. Recarregar créditos Firecrawl (desbloqueia scans + validação).
+2. Adicionar secret `FIRECRAWL_API_KEY` no repo (Settings→Secrets→Actions) p/ o workflow cloud.
+3. Validar os **9 modern pendentes** (SV04..SV10, `validated:false` no catálogo): rodar um scrape
+   `<slug>,sh,fb,aUngraded,i100,p1` em cada e virar a flag (slugs já vêm de URLs reais da COMC).
+4. Decidir threshold/escopo: margens grandes em alt-art (#>165) são spread real de secret rare —
+   **validar carta a carta no TCGplayer (condição NM)** antes de comprar. Scanner é técnico, não
+   recomenda compra.
+
+**Decisão estratégica registrada:** o valor do scanner está nos **sets MODERNOS** (estoque raw
+NM abundante na COMC). Ampliar o catálogo modern (já tem 12; faltam validar 9) é o maior ROI.
+
+---
+
 ## 0-bis. TL;DR sessão 3 (overnight 2026-06-08) — ✅ SCANNER FUNCIONANTE
 
 - **O scanner agora RODA HEADLESS e PRODUZ DEALS REAIS.** Comando funcional:
