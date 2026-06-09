@@ -232,6 +232,12 @@ class Scanner:
                                          set_index, cursor.page)
                                 return best
                     except ComcBlockedError:
+                        # A block after yielding pages is a mid-set hiccup, not a hard block.
+                        if set_yielded:
+                            consecutive_blocked = 0
+                            log.warning("COMC set '%s' blocked mid-pagination; kept partial.",
+                                        ts.name)
+                            continue
                         consecutive_blocked += 1
                         log.warning("COMC set '%s' blocked by Cloudflare (%d in a row).",
                                     ts.name, consecutive_blocked)
@@ -421,11 +427,26 @@ class Scanner:
         deadline = (time.monotonic() + self.settings.max_run_seconds) if self.settings.max_run_seconds else None
         next_flush = time.time() + self.settings.scan_interval_s
         consecutive_blocked = 0
-        log.info("Targeted scan: %d sets with COMC slugs in era '%s'.", len(targets), era)
+
+        # Resume cursor: index of the next target to scan, so a budget/stop mid-run does
+        # not re-scan (and re-pay Firecrawl for) the sets already done.
+        cursor_path = CACHE_DIR / f"targeted_{era}_idx.txt"
+        start_idx = 0
+        if resume and cursor_path.exists():
+            try:
+                start_idx = max(0, int(cursor_path.read_text().strip()))
+            except ValueError:
+                start_idx = 0
+        if start_idx >= len(targets):
+            start_idx = 0  # finished a full sweep last time; start over
+        cursor_path.parent.mkdir(parents=True, exist_ok=True)
+        log.info("Targeted scan: %d sets in era '%s' (resuming at index %d).",
+                 len(targets), era, start_idx)
 
         try:
             with ComcScraper(self.settings) as scraper:
-                for ts, year, slug in targets:
+                for idx in range(start_idx, len(targets)):
+                    ts, year, slug = targets[idx]
                     ctx = normalize_set(ts.name)
                     set_yielded = False
                     try:
@@ -447,23 +468,37 @@ class Scanner:
                                 self.reporter.flush(best.qualifying(), era, best.low_conf())
                                 next_flush += self.settings.scan_interval_s
                             if self._stop or (deadline and time.monotonic() >= deadline):
+                                cursor_path.write_text(str(idx), encoding="utf-8")  # resume here
                                 self.reporter.flush(best.qualifying(), era, best.low_conf())
-                                log.info("Targeted budget/stop hit at set '%s'.", ts.name)
+                                log.info("Targeted budget/stop hit at set '%s' (idx %d).",
+                                         ts.name, idx)
                                 return best
                     except ComcBlockedError:
-                        consecutive_blocked += 1
-                        log.warning("COMC set '%s' blocked (%d in a row).",
-                                    ts.name, consecutive_blocked)
-                        if consecutive_blocked >= 3:
-                            log.error("Cloudflare blocked %d sets in a row; aborting to "
-                                      "save credits.", consecutive_blocked)
-                            break
+                        # A block AFTER yielding pages is a mid-set hiccup, not a hard block —
+                        # don't count it against the consecutive-block circuit breaker.
+                        if set_yielded:
+                            consecutive_blocked = 0
+                            log.warning("COMC set '%s' blocked mid-pagination; kept partial.",
+                                        ts.name)
+                        else:
+                            consecutive_blocked += 1
+                            log.warning("COMC set '%s' blocked (%d in a row).",
+                                        ts.name, consecutive_blocked)
+                            if consecutive_blocked >= 3:
+                                log.error("Cloudflare blocked %d sets in a row; aborting to "
+                                          "save credits.", consecutive_blocked)
+                                cursor_path.write_text(str(idx), encoding="utf-8")
+                                break
+                        cursor_path.write_text(str(idx + 1), encoding="utf-8")
                         continue
                     if set_yielded:
                         consecutive_blocked = 0
+                    cursor_path.write_text(str(idx + 1), encoding="utf-8")
                     log.info("Scanned set '%s' via slug '%s'.", ts.name, slug)
                     if self._stop:
                         break
+                else:
+                    cursor_path.write_text("0", encoding="utf-8")  # full sweep done; reset
         except ComcAccessError as exc:
             log.error("COMC access blocked: %s", exc)
 
