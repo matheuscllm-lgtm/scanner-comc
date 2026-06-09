@@ -416,8 +416,12 @@ class ComcScraper:
         try:
             page.goto(url, wait_until="domcontentloaded", timeout=60000)
             html = page.content()
+            # Poll until a real results shell appears — catches the Cloudflare interstitial
+            # AND any transient pre-render state (the first set-path hit after warm-up can
+            # still be mid-challenge). A genuine empty page still carries searchResultsStats,
+            # so this won't spin on it.
             waited = 0
-            while (waited < solve_timeout_s and "Just a moment" in html
+            while (waited < solve_timeout_s
                    and "searchResultsStats" not in html and "cardexplorer" not in html):
                 page.wait_for_timeout(3000)
                 waited += 3
@@ -442,11 +446,19 @@ class ComcScraper:
                 log.warning("Could not seed COMC cookies: %s", exc)
 
     def _warm_up(self) -> None:
+        """Navigate home and wait out any Cloudflare Turnstile (patchright auto-solves it,
+        ~tens of seconds on a cold/expired profile) BEFORE the first real fetch — otherwise
+        the first set comes back empty while CF is still solving. Fast no-op when the
+        profile's cf_clearance is still valid."""
         page = self._context.new_page()
         try:
-            page.goto(COMC_BASE + "/", wait_until="domcontentloaded", timeout=45000)
-            page.wait_for_timeout(3000)  # give Cloudflare time to clear
-            self._context.storage_state(path=str(self._state_path))
+            page.goto(COMC_BASE + "/", wait_until="domcontentloaded", timeout=60000)
+            waited = 0
+            while waited < 80 and "Just a moment" in page.content():
+                page.wait_for_timeout(3000)
+                waited += 3
+            if waited:
+                log.info("Cloudflare cleared after ~%ds warm-up.", waited)
         except Exception as exc:  # noqa: BLE001
             log.warning("COMC warm-up navigation failed: %s", exc)
         finally:
