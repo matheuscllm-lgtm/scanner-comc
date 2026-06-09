@@ -13,9 +13,11 @@ on:
   workflow_dispatch:
     inputs:
       era:
-        description: 'Era to scan (vintage|middle|recent|all)'
+        description: 'Era to scan'
         required: false
         default: 'vintage'
+        type: choice
+        options: ['vintage', 'middle', 'recent', 'all']
       max_pages:
         description: 'Max COMC pages per set (top pages by price; 0 = all)'
         required: false
@@ -60,23 +62,27 @@ jobs:
           pip install requests rapidfuzz
 
       - name: Run targeted COMC scan
+        # Inputs are passed via env (NOT interpolated into the script body) so the GitHub
+        # template engine never expands untrusted dispatch input into shell — avoids CI/CD
+        # script injection. The scanner also validates these args (era is a fixed choice;
+        # the numeric ones are parsed as float/int and fall back to defaults).
         env:
           FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
           PYTHONIOENCODING: utf-8
+          ERA_INPUT: ${{ github.event.inputs.era || 'vintage' }}
+          MAXP_INPUT: ${{ github.event.inputs.max_pages || '3' }}
+          MARGIN_INPUT: ${{ github.event.inputs.min_margin || '0.20' }}
+          BUDGET_INPUT: ${{ github.event.inputs.max_run_seconds || '2400' }}
         run: |
           if [ -z "$FIRECRAWL_API_KEY" ]; then
             echo "::error::FIRECRAWL_API_KEY secret is not set — cannot fetch COMC headlessly."
             exit 1
           fi
-          ERA="${{ github.event.inputs.era || 'vintage' }}"
-          MAXP="${{ github.event.inputs.max_pages || '3' }}"
-          MARGIN="${{ github.event.inputs.min_margin || '0.20' }}"
-          BUDGET="${{ github.event.inputs.max_run_seconds || '2400' }}"
           python -m comc_scanner targeted \
-            --era "$ERA" \
-            --max-pages "$MAXP" \
-            --min-margin "$MARGIN" \
-            --max-run-seconds "$BUDGET" \
+            --era "$ERA_INPUT" \
+            --max-pages "$MAXP_INPUT" \
+            --min-margin "$MARGIN_INPUT" \
+            --max-run-seconds "$BUDGET_INPUT" \
             --no-sheets --restart
 
       - name: Show deal summary in the run log
