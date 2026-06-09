@@ -398,18 +398,23 @@ class ComcScraper:
 
     def iter_listings(
         self, search_term: str | None, max_pages: int = 0, start_page: int = 1,
+        era_path: str | None = None,
     ) -> Iterator[tuple[int, list[ComcListing]]]:
         """Yield (page_number, listings) for each COMC page until empty / max_pages.
 
-        A persistent Cloudflare block on a page (ComcBlockedError, after the fetcher's
-        own retries) ends this set's iteration rather than crashing the whole scan.
+        `era_path` (e.g. "1999/Pokemon_Base_Set_-_Base_-_Unlimited") browses a specific
+        set by URL path — the Cloudflare-friendly route that the faceted text-search is
+        not. A persistent Cloudflare block (ComcBlockedError, after the fetcher's own
+        retries) ends this set's iteration rather than crashing the whole scan.
         """
         n = 0
         page_no = start_page
         while True:
             if max_pages and n >= max_pages:
                 break
-            url = build_browse_url(self.settings, search_term=search_term, page=page_no)
+            url = build_browse_url(
+                self.settings, search_term=search_term, era_path=era_path, page=page_no
+            )
             try:
                 listings = parse_page(self._fetch_html(url))
             except ComcBlockedError:

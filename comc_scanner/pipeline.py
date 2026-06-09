@@ -373,6 +373,102 @@ class Scanner:
         else:
             entry["count"] = entry.get("count", 0) + 1
 
+    def run_targeted(self, era: str = "vintage", resume: bool = True) -> BestDeals:
+        """Functional scan via COMC set-path browse using the curated slug catalog.
+
+        Reads `comc_scanner/comc_set_slugs.json` (TCG set name -> {year, slug}); for each
+        set in `era`'s TCG index that has a validated COMC slug, browses that set's
+        listings by URL PATH (the Cloudflare-friendly route the text-search is not) and
+        matches them. This is the efficient, useful-yield mode vs. the broad sweep.
+        """
+        slugs = self._load_slug_catalog()
+        if not slugs:
+            log.error("No COMC slug catalog (comc_scanner/comc_set_slugs.json); run the "
+                      "slug-discovery step first. Nothing to scan in targeted mode.")
+            return BestDeals(self.settings.top_n)
+
+        groups = self.client.groups()
+        all_sets = select_sets(groups, self.settings, era)
+        by_norm = {normalize_set(ts.name): ts for ts in all_sets}
+        amap = self._alias_map(all_sets)
+        targets = []  # (TcgSet, year, slug)
+        for tcg_name, info in slugs.items():
+            if not info.get("validated") or not info.get("slug") or not info.get("year"):
+                continue
+            ts = by_norm.get(normalize_set(tcg_name)) or self._resolve_tset(tcg_name, amap)
+            if ts is not None:
+                targets.append((ts, str(info["year"]), info["slug"]))
+        if not targets:
+            log.error("Slug catalog has %d entries but none intersect era '%s'.",
+                      len(slugs), era)
+            return BestDeals(self.settings.top_n)
+
+        index = TcgIndex()
+        self._ensure_index([t[0] for t in targets], index)
+        best = BestDeals(self.settings.top_n)
+        gate, thr = self.settings.min_match_confidence, self.settings.min_gross_margin
+        deadline = (time.monotonic() + self.settings.max_run_seconds) if self.settings.max_run_seconds else None
+        next_flush = time.time() + self.settings.scan_interval_s
+        consecutive_blocked = 0
+        log.info("Targeted scan: %d sets with COMC slugs in era '%s'.", len(targets), era)
+
+        try:
+            with ComcScraper(self.settings) as scraper:
+                for ts, year, slug in targets:
+                    ctx = normalize_set(ts.name)
+                    set_yielded = False
+                    try:
+                        for page_no, listings in scraper.iter_listings(
+                            search_term=None, era_path=f"{year}/{slug}",
+                            max_pages=self.settings.max_pages_per_set,
+                        ):
+                            set_yielded = True
+                            for L in listings:
+                                if L.graded and not self.settings.comc_include_graded:
+                                    continue
+                                deal = match(L, index, self.settings, context_set_key=ctx)
+                                if deal:
+                                    deal.era = ts.era
+                                    best.add(deal, gate, thr)
+                            if time.time() >= next_flush:
+                                self.reporter.flush(best.qualifying(), era, best.low_conf())
+                                next_flush += self.settings.scan_interval_s
+                            if self._stop or (deadline and time.monotonic() >= deadline):
+                                self.reporter.flush(best.qualifying(), era, best.low_conf())
+                                log.info("Targeted budget/stop hit at set '%s'.", ts.name)
+                                return best
+                    except ComcBlockedError:
+                        consecutive_blocked += 1
+                        log.warning("COMC set '%s' blocked (%d in a row).",
+                                    ts.name, consecutive_blocked)
+                        if consecutive_blocked >= 3:
+                            log.error("Cloudflare blocked %d sets in a row; aborting to "
+                                      "save credits.", consecutive_blocked)
+                            break
+                        continue
+                    if set_yielded:
+                        consecutive_blocked = 0
+                    log.info("Scanned set '%s' via slug '%s'.", ts.name, slug)
+                    if self._stop:
+                        break
+        except ComcAccessError as exc:
+            log.error("COMC access blocked: %s", exc)
+
+        self.reporter.flush(best.qualifying(), era, best.low_conf())
+        log.info("Targeted scan done; %d qualifying deals.", len(best.qualifying()))
+        return best
+
+    def _load_slug_catalog(self) -> dict:
+        import json
+        from pathlib import Path
+        p = Path(__file__).resolve().parent / "comc_set_slugs.json"
+        if p.exists():
+            try:
+                return json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                return {}
+        return {}
+
     def run_loop(self, era: str) -> None:
         while not self._stop:
             self.client._snapshot_date = None  # re-date daily snapshot each sweep

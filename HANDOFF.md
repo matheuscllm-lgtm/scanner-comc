@@ -272,3 +272,45 @@ cartas Topps (Gary Oak, Zubat…) reportadas como cartas TCG (Leafeon 24/100, Wa
 
 **Validação:** página Topps real → **0 deals** (correto); happy-path sintético (Base/Jungle) →
 casa certo com preços/subtypes corretos; **24/24 testes**. Travado por `tests/test_parse_real.py`.
+
+---
+
+## 12. Sessão 3 (overnight 2026-06-08) — fetch headless via Firecrawl + modos de scan
+
+**Objetivo da sessão:** tornar o scanner FUNCIONANTE headless (sem navegador/login).
+
+### O que foi feito (commitado/pushado)
+1. **Transporte Firecrawl** (`comc_scanner/firecrawl_client.py`): `/v2/scrape` com `proxy:stealth`
+   fura o Cloudflare da COMC sem Playwright/login/cookies. `ComcScraper` virou **mode-aware**
+   (`COMC_FETCH_MODE=firecrawl|playwright`, default firecrawl); `iter_listings`/`capture` usam
+   `_fetch_html()`. CLI `--fetch-mode`. **Verificado ao vivo:** o `capture` do próprio scanner
+   baixa página real headless (644 KB, 100 listagens). (commit `df32a65`)
+2. **Circuit breaker** (review do agente revisor): `run_once` conta sets bloqueados em sequência
+   e aborta após 3 — evita queimar créditos Firecrawl num bloqueio de conta. `iter_listings`
+   re-levanta `ComcBlockedError` (≠ página vazia). (commit `6165f00`)
+3. **Modo `broad`**: varre a browse simples (que fura CF), filtra pelo matcher, e **colhe slugs**
+   das URLs em `.cache/comc_set_catalog.json`. Rodou headless 400 listagens → **0 match**
+   (a browse barata da COMC é 100% Topps/novelty, fora do TCGCSV). (commit `6165f00`)
+4. **Modo `targeted`** (`run_targeted`): lê `comc_scanner/comc_set_slugs.json`
+   (TCG set → {year, slug}) e navega cada set pela **URL de set-path** (rota que fura CF). É o
+   modo de **yield útil**.
+
+### Descobertas-chave (NÃO re-descobrir)
+- **Set-path browse fura o CF; text-search NÃO.** URL que funciona:
+  `/Cards/Pokemon/<ano>/<Set_Slug>,sl,fb,aUngraded,rCOMC,i100,p1` (verificado: set Topps 175
+  listagens, set-scoped). A busca facetada `,=<termo>,` leva challenge 3×+ seguidas.
+- **A categoria `/Cards/Pokemon` da COMC é dominada por Topps/Bandai/Topsun/Burger King/stickers**
+  (fora do TCGCSV) nos extremos de preço. Por isso `broad` rende ~0 e `targeted` (set-path) é o
+  caminho. O alvo real de arbitragem é **WotC vintage** (Base/Jungle/Fossil/Neo…) — existe no
+  TCGCSV e tem inventário raw na COMC.
+- **Naming COMC (WotC EN):** "Pokemon Base Set - [Base] - Unlimited"; slug troca espaço→`_` e
+  dropa os colchetes (`[Base]`→`Base`). Ex. Jungle Spanish slug = `Pokemon_Jungle_-_Base_-_Spanish`.
+  A descoberta de slug exato sai de URLs de card-detail reais (via `firecrawl_search site:comc.com`).
+
+### Pendência imediata (estado ao escrever)
+- **`comc_set_slugs.json`** está sendo construído por um sub-agente (firecrawl_search + validação
+  set-path) p/ ~15 sets WotC. Quando existir, rodar `targeted --era vintage` valida o yield real.
+  Sem ele, `targeted` loga "no catalog" e não quebra.
+- **Próximos passos:** (a) validar `targeted` com o catálogo → primeiros deals reais; (b) ampliar
+  catálogo (modernos SV/SWSH se houver inventário raw); (c) GH Actions/Task Scheduler pro run
+  recorrente; (d) testes offline pro `run_broad`/`run_targeted` (mock do fetcher).

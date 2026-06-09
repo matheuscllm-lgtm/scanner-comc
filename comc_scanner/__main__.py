@@ -80,6 +80,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(p_broad)
     p_broad.add_argument("--restart", action="store_true", help="ignore saved page cursor")
 
+    p_targeted = sub.add_parser(
+        "targeted", help="scan specific TCG sets via COMC set-path browse (uses comc_set_slugs.json)"
+    )
+    _add_common(p_targeted)
+    p_targeted.add_argument("--restart", action="store_true", help="ignore saved cursor")
+
     p_refresh = sub.add_parser("refresh-prices", help="force re-download the TCGCSV snapshot")
     _add_common(p_refresh)
 
@@ -126,6 +132,8 @@ def main(argv: list[str] | None = None) -> int:
         scanner.run_once(era, resume=not args.restart)
     elif args.command == "broad":
         scanner.run_broad(era, resume=not args.restart)
+    elif args.command == "targeted":
+        scanner.run_targeted(era if era != "all" else "vintage", resume=not args.restart)
     elif args.command == "run":
         if args.restart:
             from .segments import ChunkCursor
