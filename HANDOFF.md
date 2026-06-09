@@ -334,6 +334,24 @@ casa certo com preços/subtypes corretos; **24/24 testes**. Travado por `tests/t
   **rodar sem `--max-pages`** (varre o set inteiro) — ou trocar pra sort `sh` p/ priorizar as
   NM valiosas. (Refino, não bug.)
 
+### ⚠️ Resultado REAL dos sweeps + leitura honesta do mercado (importante p/ o operador)
+- Sweep completo dos 15 sets WotC (sl e sh, NM-only, ≥20%) → **1 deal qualificado** (Pikachu
+  Base Set EX-NM $5,43→$7,62, 28,7%). Os 15 sets rodaram limpos, headless, 0 erro/0 CF-block.
+- **Por que tão pouco:** COMC e TCGplayer são o **MESMO mercado US** — sem a vantagem cambial/
+  cross-border dos scanners irmãos (BR/EU vs US). As listagens da COMC ficam em geral no/above
+  market do TCGplayer; só aparece deal quando um vendedor sub-precifica de fato. **NM-only + ≥20%
+  num mesmo mercado = yield naturalmente baixo.** Não é bug — é a estrutura do mercado.
+- **Decisões do operador** (não mexi, são capital/estratégia): (a) baixar o threshold (ex. 10%)
+  rende mais deals porém mais finos; (b) avaliar se a tese COMC→TCGplayer compensa vs o esforço;
+  (c) modern SV/SWSH raw NM na COMC tende a ser ainda mais raro (COMC é vintage-cêntrica) — vale
+  uma sondagem antes de investir no catálogo moderno.
+
+### Agendamento recorrente — ✅ scaffold criado
+- `.github/workflows/scan.yml`: `workflow_dispatch` (era/max_pages/margin/budget) + cron diário
+  COMENTADO (operador opta, espelhando a convenção dos irmãos). Roda `targeted` headless, exige
+  secret **`FIRECRAWL_API_KEY`** (falha alto se faltar), joga a tabela no run-summary + artifact.
+  **AÇÃO DO OPERADOR:** adicionar `FIRECRAWL_API_KEY` em repo Settings → Secrets → Actions.
+
 ### Pendência imediata (estado ao escrever)
 - **`comc_set_slugs.json`** está sendo construído por um sub-agente (firecrawl_search + validação
   set-path) p/ ~15 sets WotC. Quando existir, rodar `targeted --era vintage` valida o yield real.
