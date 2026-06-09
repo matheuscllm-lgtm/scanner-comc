@@ -5,6 +5,22 @@
 
 ---
 
+## 0-bis. TL;DR sessão 3 (overnight 2026-06-08) — ✅ SCANNER FUNCIONANTE
+
+- **O scanner agora RODA HEADLESS e PRODUZ DEALS REAIS.** Comando funcional:
+  `python -m comc_scanner targeted --era vintage --no-sheets` — varre os 15 sets WotC do
+  catálogo via **set-path browse** (fura Cloudflare), casa com TCGCSV, reporta tabela.
+- **Como funciona o fetch:** Firecrawl `proxy:stealth` (sem navegador/login). `COMC_FETCH_MODE`
+  default `firecrawl`. Precisa `FIRECRAWL_API_KEY` no ambiente (já setado na máquina).
+- **Validado ao vivo:** `targeted` em Base/Jungle/Fossil → **50 deals reais** (commit antes do
+  filtro de condição). Depois apliquei o **filtro NM-only** (invariante do operador).
+- **Modos:** `targeted` (set-path, yield útil — USAR ESTE) · `broad` (browse genérica, ~0 por
+  ser Topps) · `once`/`run` (per-set text-search — bloqueado por CF, evitar em firecrawl).
+- **Detalhes completos da sessão em §12.** Pendências/nuances conhecidas em §12 também
+  (sort `sl` favorece played → paginar fundo p/ NM; sem piso de preço; agendamento recorrente).
+
+---
+
 ## 0. TL;DR (estado atual)
 
 - **O que é:** um scanner em Python que acha cartas Pokémon listadas na **COMC** por preço
@@ -306,6 +322,17 @@ casa certo com preços/subtypes corretos; **24/24 testes**. Travado por `tests/t
 - **Naming COMC (WotC EN):** "Pokemon Base Set - [Base] - Unlimited"; slug troca espaço→`_` e
   dropa os colchetes (`[Base]`→`Base`). Ex. Jungle Spanish slug = `Pokemon_Jungle_-_Base_-_Spanish`.
   A descoberta de slug exato sai de URLs de card-detail reais (via `firecrawl_search site:comc.com`).
+
+### Filtro NM-only (correção de invariante) + nuance de yield
+- A browse set-path **ignora o facet de condição `gEX-NM`** → vazavam LP/MP/HP/Noted (quebra
+  o invariante NM-only do operador e infla margem: carta played vs preço NM do TCG). Corrigido
+  com **filtro por condição da URL** (`COMC_CONDITION_ALLOW`, default `nm,mint,m,ex-nm`) nos
+  loops live (targeted/broad/once). Validado: Base Set/Base Set 2 → só **EX-NM** sobra
+  (ex.: Pikachu 058/102 EX-NM $5.43→$7.62, 28,7%).
+- **Nuance de yield:** o sort `sl` (mais barato primeiro) traz as cartas PLAYED primeiro; as NM
+  ficam em páginas mais fundas. Com page-cap baixo o yield NM é pequeno. Para o sweep real:
+  **rodar sem `--max-pages`** (varre o set inteiro) — ou trocar pra sort `sh` p/ priorizar as
+  NM valiosas. (Refino, não bug.)
 
 ### Pendência imediata (estado ao escrever)
 - **`comc_set_slugs.json`** está sendo construído por um sub-agente (firecrawl_search + validação
