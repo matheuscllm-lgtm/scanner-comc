@@ -213,6 +213,8 @@ class Scanner:
                             for L in listings:
                                 if L.graded and not self.settings.comc_include_graded:
                                     continue
+                                if not self._condition_ok(L):
+                                    continue
                                 deal = match(L, index, self.settings, context_set_key=ctx)
                                 if deal:
                                     deal.era = ts.era
@@ -310,6 +312,8 @@ class Scanner:
                         self._harvest_slug(L, catalog)
                         if L.graded and not self.settings.comc_include_graded:
                             continue
+                        if not self._condition_ok(L):
+                            continue
                         deal = match(L, index, self.settings)
                         if deal:
                             matched += 1
@@ -356,6 +360,13 @@ class Scanner:
         p = self._catalog_path()
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(catalog, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    def _condition_ok(self, listing) -> bool:
+        """NM-only invariant: keep only NM-range conditions (COMC's g-band facet is
+        ignored on set-path browse, so we enforce it here from the per-listing condition).
+        An empty/unknown condition is dropped (conservative — don't compare unknown to NM)."""
+        cond = (listing.condition or "").strip().lower()
+        return cond in self.settings.comc_condition_allow
 
     @staticmethod
     def _harvest_slug(listing, catalog: dict) -> None:
@@ -425,6 +436,8 @@ class Scanner:
                             set_yielded = True
                             for L in listings:
                                 if L.graded and not self.settings.comc_include_graded:
+                                    continue
+                                if not self._condition_ok(L):
                                     continue
                                 deal = match(L, index, self.settings, context_set_key=ctx)
                                 if deal:

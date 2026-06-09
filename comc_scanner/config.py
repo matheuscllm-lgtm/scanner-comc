@@ -83,6 +83,10 @@ class Settings:
     comc_condition_band: str = "EX-NM"
     comc_include_graded: bool = False
     comc_seller_repo: str = ""  # "" = all repos; "COMC" = RCR only (empty for vintage)
+    # NM-only invariant: COMC's g-band facet is ignored on set-path browse, so we filter
+    # by the per-listing condition (from the card URL). Keep only these (lowercased) — the
+    # NM-range top raw grades. Comparing a played card to the NM TCG price would inflate margin.
+    comc_condition_allow: tuple[str, ...] = ("nm", "mint", "m", "ex-nm", "exnm", "near mint")
     comc_request_delay_s: float = 4.0
     comc_headless: bool = True
     # Fetch transport: "firecrawl" (headless, no browser/login — clears Cloudflare via
@@ -131,6 +135,11 @@ def load_settings(env_file: Path | None = None) -> Settings:
         comc_condition_band=_get("COMC_CONDITION_BAND", "EX-NM"),
         comc_include_graded=_get_bool("COMC_INCLUDE_GRADED", False),
         comc_seller_repo=_get("COMC_SELLER_REPO", ""),
+        comc_condition_allow=tuple(
+            c.strip().lower() for c in _get(
+                "COMC_CONDITION_ALLOW", "nm,mint,m,ex-nm,exnm,near mint"
+            ).split(",") if c.strip()
+        ),
         comc_request_delay_s=_get_float("COMC_REQUEST_DELAY_SECONDS", 4.0),
         comc_headless=_get_bool("COMC_BROWSER_HEADLESS", True),
         comc_fetch_mode=(_get("COMC_FETCH_MODE", "firecrawl") or "firecrawl").lower(),
