@@ -14,7 +14,11 @@ def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--era", choices=VALID_ERAS, help="set era to scan (default from env)")
     p.add_argument("--top-n", type=int, help="number of deals to keep/report")
     p.add_argument("--interval", type=int, help="seconds between partial flushes")
-    p.add_argument("--min-margin", type=float, help="min gross margin (e.g. 0.20)")
+    p.add_argument("--min-margin", type=float, help="min gross margin (e.g. 0.30)")
+    p.add_argument("--min-price", type=float,
+                   help="min COMC ask in USD (default 10 = the R$50 floor; 0 disables)")
+    p.add_argument("--chase-only", action="store_true",
+                   help="value-buy mode: keep only chase rarities (drops Common/Uncommon/Rare)")
     p.add_argument("--min-confidence", type=float, help="min match confidence for top list")
     p.add_argument("--margin-mode", choices=["gross", "markup"], help="margin formula")
     p.add_argument("--sets", help="comma-separated set allowlist (names/abbrevs)")
@@ -36,6 +40,10 @@ def _apply_overrides(settings, args) -> None:
         settings.scan_interval_s = args.interval
     if args.min_margin is not None:
         settings.min_gross_margin = args.min_margin
+    if args.min_price is not None:
+        settings.min_comc_price = args.min_price
+    if args.chase_only:
+        settings.chase_only = True
     if args.min_confidence is not None:
         settings.min_match_confidence = args.min_confidence
     if args.margin_mode:
@@ -113,6 +121,14 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(p_parse)
     p_parse.add_argument("--html", required=True, help="path to a saved COMC page")
 
+    p_val = sub.add_parser(
+        "validate-slugs", help="live-validate pending comc_set_slugs.json entries "
+                               "(page-1 scrape each; flips validated flag in place)"
+    )
+    _add_common(p_val)
+    p_val.add_argument("--revalidate", action="store_true",
+                       help="re-check every slug, not just the pending ones")
+
     return parser
 
 
@@ -134,6 +150,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if ok else 1
 
     scanner = Scanner(settings)
+    if args.command == "validate-slugs":
+        results = scanner.validate_slugs(revalidate=args.revalidate)
+        for name, count in sorted(results.items()):
+            status = "OK" if count > 0 else ("CF-BLOCK" if count < 0 else "EMPTY")
+            print(f"  {status:8s} {name}  (page-1 listings: {max(count, 0)})")
+        return 0 if results and all(c > 0 for c in results.values()) else (0 if not results else 1)
     if args.command == "refresh-prices":
         scanner.refresh_prices(era)
     elif args.command == "dry-run":

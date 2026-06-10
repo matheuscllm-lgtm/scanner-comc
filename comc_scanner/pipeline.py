@@ -228,10 +228,11 @@ class Scanner:
                             for L in listings:
                                 if L.graded and not self.settings.comc_include_graded:
                                     continue
-                                if not self._condition_ok(L) or not self._variant_ok(L):
+                                if (not self._condition_ok(L) or not self._variant_ok(L)
+                                        or not self._price_ok(L)):
                                     continue
                                 deal = match(L, index, self.settings, context_set_key=ctx)
-                                if deal:
+                                if deal and self._chase_ok(deal.product):
                                     deal.era = ts.era
                                     best.add(deal, gate, thr)
                             last_page = page_no
@@ -333,10 +334,11 @@ class Scanner:
                         self._harvest_slug(L, catalog)
                         if L.graded and not self.settings.comc_include_graded:
                             continue
-                        if not self._condition_ok(L) or not self._variant_ok(L):
+                        if (not self._condition_ok(L) or not self._variant_ok(L)
+                                or not self._price_ok(L)):
                             continue
                         deal = match(L, index, self.settings)
-                        if deal:
+                        if deal and self._chase_ok(deal.product):
                             matched += 1
                             deal.era = era
                             best.add(deal, gate, thr)
@@ -396,6 +398,21 @@ class Scanner:
         blob = f"{listing.set_hint or ''} {listing.raw_name or ''}".lower()
         return not any(v in blob for v in self.settings.comc_exclude_variants)
 
+    def _price_ok(self, listing) -> bool:
+        """Price floor on the COMC ask (the operator's R$50 ≈ $10 "valuable card" rule).
+        min_comc_price=0 disables the floor."""
+        floor = self.settings.min_comc_price
+        return floor <= 0 or listing.price >= floor
+
+    def _chase_ok(self, product) -> bool:
+        """Value-buy mode: keep only chase rarities. Bulk rarities (Common/Uncommon/plain
+        Rare) and unknown-rarity products are dropped — only classes with hold/appreciation
+        potential qualify. No-op unless chase_only is set."""
+        if not self.settings.chase_only:
+            return True
+        rarity = (product.rarity or "").strip().lower()
+        return bool(rarity) and rarity not in self.settings.chase_exclude_rarities
+
     @staticmethod
     def _harvest_slug(listing, catalog: dict) -> None:
         """Record the COMC (year, slug) for a listing's set, keyed by set_hint."""
@@ -436,7 +453,10 @@ class Scanner:
             # the year embedded) — only slug is strictly required.
             if not info.get("validated") or not info.get("slug"):
                 continue
-            ts = by_norm.get(normalize_set(tcg_name)) or self._resolve_tset(tcg_name, amap)
+            # EXACT name/alias match only. Catalog keys are exact TCGCSV names; a fuzzy
+            # containment fallback here once paired the 1999 WotC "Base Set" slug with
+            # "SV01: Scarlet & Violet Base Set" in era=recent (cross-era false positives).
+            ts = by_norm.get(normalize_set(tcg_name)) or amap.get(normalize_set(tcg_name))
             if ts is not None:
                 targets.append((ts, str(info.get("year", "")), info["slug"]))
         if not targets:
@@ -486,10 +506,11 @@ class Scanner:
                             for L in listings:
                                 if L.graded and not self.settings.comc_include_graded:
                                     continue
-                                if not self._condition_ok(L) or not self._variant_ok(L):
+                                if (not self._condition_ok(L) or not self._variant_ok(L)
+                                        or not self._price_ok(L)):
                                     continue
                                 deal = match(L, index, self.settings, context_set_key=ctx)
-                                if deal:
+                                if deal and self._chase_ok(deal.product):
                                     deal.era = ts.era
                                     best.add(deal, gate, thr)
                             if time.time() >= next_flush:
@@ -544,6 +565,64 @@ class Scanner:
             except Exception:
                 return {}
         return {}
+
+    def validate_slugs(self, revalidate: bool = False) -> dict[str, int]:
+        """Live-validate catalog slugs that are still `validated: false`: scrape page 1 of
+        each set-path, and flip the flag when real listings come back. Updates
+        `comc_set_slugs.json` in place. Returns {set_name: page-1 listing count}
+        (-1 = Cloudflare block, 0 = empty page / bad slug, left unvalidated).
+        """
+        import datetime
+        import json
+        from pathlib import Path
+
+        path = Path(__file__).resolve().parent / "comc_set_slugs.json"
+        slugs = self._load_slug_catalog()
+        pending = [
+            (name, info) for name, info in slugs.items()
+            if not name.startswith("_") and isinstance(info, dict) and info.get("slug")
+            and (revalidate or not info.get("validated"))
+        ]
+        results: dict[str, int] = {}
+        if not pending:
+            log.info("Slug catalog: nothing pending validation.")
+            return results
+        log.info("Validating %d catalog slugs (one page-1 scrape each).", len(pending))
+        today = datetime.date.today().isoformat()
+        try:
+            with ComcScraper(self.settings) as scraper:
+                for name, info in pending:
+                    year = str(info.get("year", ""))
+                    era_path = f"{year}/{info['slug']}" if year else info["slug"]
+                    count = 0
+                    try:
+                        for _page, listings in scraper.iter_listings(
+                            search_term=None, era_path=era_path, max_pages=1,
+                        ):
+                            count = len(listings)
+                            break
+                    except ComcBlockedError:
+                        log.warning("Slug '%s' (%s): Cloudflare block; left unvalidated.",
+                                    name, era_path)
+                        results[name] = -1
+                        continue
+                    results[name] = count
+                    if count > 0:
+                        info["validated"] = True
+                        info["validated_at"] = today
+                        info["page1_listings"] = count
+                        log.info("Slug '%s' OK: %d listings on page 1.", name, count)
+                    else:
+                        log.warning("Slug '%s' (%s): 0 listings — slug likely wrong.",
+                                    name, era_path)
+        except ComcAccessError as exc:
+            log.error("COMC access blocked: %s", exc)
+        path.write_text(json.dumps(slugs, indent=2, ensure_ascii=False) + "\n",
+                        encoding="utf-8")
+        ok = sum(1 for c in results.values() if c > 0)
+        log.info("Slug validation done: %d/%d confirmed; catalog updated at %s.",
+                 ok, len(pending), path)
+        return results
 
     def run_loop(self, era: str) -> None:
         while not self._stop:

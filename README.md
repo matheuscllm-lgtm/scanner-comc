@@ -3,9 +3,13 @@
 Scanner de arbitragem **COMC → TCGPlayer** para cartas avulsas de Pokémon TCG.
 
 Procura cartas listadas na [COMC](https://www.comc.com) por preço abaixo do preço
-habitual do **TCGPlayer** e reporta os **melhores deals por margem bruta**. Como as
-cartas já estão na COMC e você tem conta lá, o único filtro é **margem bruta > 20%**
-(configurável). Lista o **top 50** por margem desc., **sem preço mínimo**.
+habitual do **TCGPlayer** e reporta os **melhores deals por margem bruta**. Filtros
+padrão (todos configuráveis): **margem bruta ≥ 30%** (o limiar canônico dos scanners
+irmãos), **piso de preço US$ 10** (a regra "carta valiosa ≥ R$50") e top 50 por margem.
+O modo **`--chase-only`** ("value buy") mantém só raridades de perseguição —
+Illustration Rare, Special Illustration Rare, Ultra Rare, Holo Rare vintage etc. —
+descartando Common/Uncommon/Rare bulk: é o modo para **comprar com desconto cartas com
+potencial de valorização**, não só flip imediato.
 
 ## Como funciona
 
@@ -81,10 +85,17 @@ python -m comc_scanner dry-run --era all --html tests/fixtures/comc_real_capture
 `tests/test_parse_real.py` trava essa estrutura: se a COMC mudar o DOM, a CI quebra ali.
 Capturas reais saem via Firecrawl (`proxy: stealth`), sem navegador/login — ver `HANDOFF.md` §10.
 
-Flags úteis: `--top-n 50`, `--min-margin 0.20`, `--min-confidence 0.80`,
-`--interval 3600`, `--condition EX-NM`, `--include-graded`, `--headful`,
-`--no-sheets`, `--sets "Evolving Skies,SV09"`, `--restart`. Variáveis equivalentes
-estão em `.env.example`.
+Flags úteis: `--top-n 50`, `--min-margin 0.30`, `--min-price 10` (0 desliga o piso),
+`--chase-only` (só raridades chase), `--min-confidence 0.80`, `--interval 3600`,
+`--condition EX-NM`, `--include-graded`, `--headful`, `--no-sheets`,
+`--sets "Evolving Skies,SV09"`, `--restart`. Variáveis equivalentes em `.env.example`.
+
+Para validar entradas pendentes do catálogo de slugs da COMC
+(`comc_scanner/comc_set_slugs.json`) sem gastar crédito:
+
+```bash
+python -m comc_scanner validate-slugs --fetch-mode playwright --no-sheets
+```
 
 ## Testes
 

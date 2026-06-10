@@ -77,6 +77,44 @@ def test_condition_allowlist_is_configurable():
     assert sc._condition_ok(_listing("EX-NM")) is False  # tightened to strict NM
 
 
+# --- price floor + chase-rarity filters (value-buy mode) -------------------
+
+def test_price_floor_defaults_to_10_usd():
+    sc = Scanner(_settings())
+    assert sc._price_ok(ComcListing(raw_name="X", price=9.99, url="")) is False
+    assert sc._price_ok(ComcListing(raw_name="X", price=10.00, url="")) is True
+
+
+def test_price_floor_zero_disables():
+    sc = Scanner(_settings(min_comc_price=0.0))
+    assert sc._price_ok(ComcListing(raw_name="X", price=0.25, url="")) is True
+
+
+def test_min_margin_default_is_canonical_30pct():
+    assert _settings().min_gross_margin == 0.30
+
+
+def _product(rarity):
+    from comc_scanner.models import TcgProduct
+    return TcgProduct(product_id=1, group_id=1, set_name="S", name="N",
+                      clean_name="n", rarity=rarity)
+
+
+def test_chase_filter_off_by_default():
+    sc = Scanner(_settings())
+    assert sc._chase_ok(_product("Common")) is True
+
+
+def test_chase_filter_drops_bulk_keeps_chase():
+    sc = Scanner(_settings(chase_only=True))
+    for bulk in ("Common", "Uncommon", "Rare", "rare", ""):
+        assert sc._chase_ok(_product(bulk)) is False, bulk
+    assert sc._chase_ok(_product(None)) is False  # unknown rarity: conservative drop
+    for chase in ("Illustration Rare", "Special Illustration Rare", "Ultra Rare",
+                  "Hyper Rare", "Secret Rare", "Double Rare", "Holo Rare"):
+        assert sc._chase_ok(_product(chase)) is True, chase
+
+
 # --- slug harvest + catalog loader -----------------------------------------
 
 def test_harvest_slug_extracts_year_and_slug_from_url():

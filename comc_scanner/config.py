@@ -112,7 +112,16 @@ class Settings:
     comc_profile_dir: str = str(CACHE_DIR / "pw_profile_comc")
 
     # Scan behaviour
-    min_gross_margin: float = 0.20
+    # 0.30 = the operator's canonical cross-scanner gross-margin threshold (CT/MYP/Liga).
+    min_gross_margin: float = 0.30
+    # Price floor (USD) on the COMC ask: the canonical "valuable card" floor is R$50 ≈ $10.
+    # Cards below it are noise for the operator's import lot model. 0 disables.
+    min_comc_price: float = 10.0
+    # Value-buy mode: keep only "chase" rarities (anything beyond Common/Uncommon/plain
+    # Rare — Illustration Rare, Special Illustration Rare, Ultra Rare, vintage Holo Rare...).
+    # These are the classes that hold/appreciate; bulk rarities rarely do.
+    chase_only: bool = False
+    chase_exclude_rarities: tuple[str, ...] = ("common", "uncommon", "rare")
     top_n: int = 50
     scan_interval_s: int = 3600
     min_match_confidence: float = 0.80
@@ -170,7 +179,14 @@ def load_settings(env_file: Path | None = None) -> Settings:
         firecrawl_proxy=_get("FIRECRAWL_PROXY", "stealth") or "stealth",
         comc_profile_dir=_get("COMC_PROFILE_DIR", str(CACHE_DIR / "pw_profile_comc"))
         or str(CACHE_DIR / "pw_profile_comc"),
-        min_gross_margin=_get_float("MIN_GROSS_MARGIN", 0.20),
+        min_gross_margin=_get_float("MIN_GROSS_MARGIN", 0.30),
+        min_comc_price=_get_float("MIN_COMC_PRICE", 10.0),
+        chase_only=_get_bool("CHASE_ONLY", False),
+        chase_exclude_rarities=tuple(
+            r.strip().lower() for r in _get(
+                "CHASE_EXCLUDE_RARITIES", "common,uncommon,rare"
+            ).split(",") if r.strip()
+        ),
         top_n=_get_int("TOP_N", 50),
         scan_interval_s=_get_int("SCAN_INTERVAL_SECONDS", 3600),
         min_match_confidence=_get_float("MIN_MATCH_CONFIDENCE", 0.80),

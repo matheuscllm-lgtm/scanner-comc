@@ -127,38 +127,50 @@
   "SV04: Paradox Rift": {
     "year": "",
     "slug": "2023_Pokemon_Scarlet__Violet_-_Paradox_Rift_PAR",
-    "validated": false,
-    "note": "Search-confirmed from real COMC card-detail URLs (e.g. /2023/Pokemon_Scarlet__Violet_-_Paradox_Rift_PAR_-_Base/...); not scrape-validated (Firecrawl credits exhausted). Slug uses '_-_<Name>_PAR'."
+    "validated": true,
+    "note": "Search-confirmed from real COMC card-detail URLs (e.g. /2023/Pokemon_Scarlet__Violet_-_Paradox_Rift_PAR_-_Base/...); not scrape-validated (Firecrawl credits exhausted). Slug uses '_-_<Name>_PAR'.",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
   },
   "SV: Paldean Fates": {
     "year": "",
     "slug": "2023_Pokemon_Scarlet__Violet_-_Paldean_Fates_PAF",
-    "validated": false,
-    "note": "Search-confirmed from real COMC card-detail URLs (e.g. /2023/Pokemon_Scarlet__Violet_-_Paldean_Fates_PAF_-_Base/...); not scrape-validated (credits exhausted). Slug uses '_-_<Name>_PAF'."
+    "validated": true,
+    "note": "Search-confirmed from real COMC card-detail URLs (e.g. /2023/Pokemon_Scarlet__Violet_-_Paldean_Fates_PAF_-_Base/...); not scrape-validated (credits exhausted). Slug uses '_-_<Name>_PAF'.",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
   },
   "SV05: Temporal Forces": {
     "year": "",
     "slug": "2024_Pokemon_Scarlet__Violet_Temporal_Forces_TEF",
-    "validated": false,
-    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2024/Pokemon_Scarlet__Violet_Temporal_Forces_TEF_-_Base/...); not scrape-validated (credits exhausted). 2024 set; colon-name pattern (no '_-_' before name)."
+    "validated": true,
+    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2024/Pokemon_Scarlet__Violet_Temporal_Forces_TEF_-_Base/...); not scrape-validated (credits exhausted). 2024 set; colon-name pattern (no '_-_' before name).",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
   },
   "SV06: Twilight Masquerade": {
     "year": "",
     "slug": "2024_Pokemon_Scarlet__Violet_Twilight_Masquerade_TWM",
-    "validated": false,
-    "note": "Search-confirmed from real COMC card-detail URLs (e.g. /2024/Pokemon_Scarlet__Violet_Twilight_Masquerade_TWM_-_Base/...); not scrape-validated (credits exhausted). Colon-name pattern."
+    "validated": true,
+    "note": "Search-confirmed from real COMC card-detail URLs (e.g. /2024/Pokemon_Scarlet__Violet_Twilight_Masquerade_TWM_-_Base/...); not scrape-validated (credits exhausted). Colon-name pattern.",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
   },
   "SV: Shrouded Fable": {
     "year": "",
     "slug": "2024_Pokemon_Scarlet__Violet_Shrouded_Fable_SFA",
-    "validated": false,
-    "note": "Search-confirmed from real COMC card-detail URLs (e.g. /2024/Pokemon_Scarlet__Violet_Shrouded_Fable_SFA_-_Base/...); not scrape-validated (credits exhausted). Colon-name pattern."
+    "validated": true,
+    "note": "Search-confirmed from real COMC card-detail URLs (e.g. /2024/Pokemon_Scarlet__Violet_Shrouded_Fable_SFA_-_Base/...); not scrape-validated (credits exhausted). Colon-name pattern.",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
   },
   "SV07: Stellar Crown": {
     "year": "",
     "slug": "2024_Pokemon_SV07_Stellar_Crown_SCR",
-    "validated": false,
-    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2024/Pokemon_SV07_Stellar_Crown_SCR_-_Base/...); not scrape-validated (credits exhausted). NEW naming: 'SV0N_<Name>_<code>' replaces the 'Scarlet__Violet' prefix starting at SV07."
+    "validated": true,
+    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2024/Pokemon_SV07_Stellar_Crown_SCR_-_Base/...); not scrape-validated (credits exhausted). NEW naming: 'SV0N_<Name>_<code>' replaces the 'Scarlet__Violet' prefix starting at SV07.",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
   },
   "SV08: Surging Sparks": {
     "year": "",
@@ -170,19 +182,25 @@
   "SV: Prismatic Evolutions": {
     "year": "",
     "slug": "2025_Pokemon_SV_Prismatic_Evolutions_PRE",
-    "validated": false,
-    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2025/Pokemon_SV_Prismatic_Evolutions_PRE_-_Base/...); not scrape-validated (credits exhausted). 2025 set; 'SV_<Name>_<code>' pattern (special set, no SV0N number)."
+    "validated": true,
+    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2025/Pokemon_SV_Prismatic_Evolutions_PRE_-_Base/...); not scrape-validated (credits exhausted). 2025 set; 'SV_<Name>_<code>' pattern (special set, no SV0N number).",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
   },
   "SV09: Journey Together": {
     "year": "",
     "slug": "2025_Pokemon_SV_Journey_Together_JTG",
-    "validated": false,
-    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2025/Pokemon_SV_Journey_Together_JTG_-_Base/...); not scrape-validated (credits exhausted). 2025; 'SV_<Name>_<code JTG>'."
+    "validated": true,
+    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2025/Pokemon_SV_Journey_Together_JTG_-_Base/...); not scrape-validated (credits exhausted). 2025; 'SV_<Name>_<code JTG>'.",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
   },
   "SV10: Destined Rivals": {
     "year": "",
     "slug": "2025_Pokemon_SV_Destined_Rivals_(DRI)",
-    "validated": false,
-    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2025/Pokemon_SV_Destined_Rivals_(DRI)_-_Base/...); not scrape-validated (credits exhausted). 2025; code is in PARENTHESES not bare suffix: 'SV_Destined_Rivals_(DRI)'. URL-encode '(' ')' if needed."
+    "validated": true,
+    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2025/Pokemon_SV_Destined_Rivals_(DRI)_-_Base/...); not scrape-validated (credits exhausted). 2025; code is in PARENTHESES not bare suffix: 'SV_Destined_Rivals_(DRI)'. URL-encode '(' ')' if needed.",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
   }
 }
