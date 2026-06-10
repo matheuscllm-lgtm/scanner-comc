@@ -1,0 +1,206 @@
+{
+  "_meta": {
+    "description": "TCGCSV/TCGplayer set name -> COMC {year, slug} for vintage WotC-era Pokemon sets. Used to build the COMC set-path browse URL: https://www.comc.com/Cards/Pokemon/<year>/<slug>,sl,fb,aUngraded,rCOMC,i100,p1",
+    "comc_count_note": "comc_count is the ungraded listing count from searchResultsStats WITHOUT the rCOMC repository filter (i.e. aUngraded only). IMPORTANT: the verified scanner URL uses ',rCOMC' which restricts to COMC's own RCR consignment repository -- that repository is essentially EMPTY for vintage WotC ungraded (every set returned 0-1 listings under rCOMC). The real ungraded inventory lives under the other seller repositories (rOther / rCOMC_CCG). To actually see these listings the scanner should drop the rCOMC filter (use ',aUngraded,' alone) or query the seller repos. All slugs below were confirmed real either way (page title resolves to the exact set, no Cloudflare challenge, card-detail links share the slug).",
+    "slug_patterns": {
+      "wotc_classic": "Pokemon_<SetName>_-_Base  (spaces->underscores). The '[Base]' bracket in the display name becomes '_-_Base' in the slug. English Unlimited is the plain '_-_Base'; variants append a suffix: '_-_1st_Edition', '_-_Shadowless', '_-_Spanish', '_-_German', '_-_Reverse_Foil'.",
+      "neo_revelation_quirk": "Neo Revelation is named 'Pokemon - Neo Revelation' on COMC, so its slug has an extra leading '_-_': Pokemon_-_Neo_Revelation_-_Base. The other three Neo sets use the normal Pokemon_Neo_<Name>_-_Base form.",
+      "ecard_series": "e-Card sets (Expedition/Aquapolis/Skyridge) are grouped under 'e-Card Series': Pokemon_e-Card_Series_-_<Name>_-_Base. Skyridge/Aquapolis also have '_-_German' and '_-_Reverse_Foil' sibling slugs; pick the plain '_-_Base'.",
+      "years": "Base/Jungle/Fossil=1999; Base Set 2/Team Rocket/Gym Heroes/Gym Challenge/Neo Genesis=2000; Neo Discovery/Neo Revelation=2001; Neo Destiny/Legendary Collection/Expedition=2002; Aquapolis/Skyridge=2003."
+    },
+    "validated_at": "2026-06-08",
+    "validation_filter_used": "aUngraded (rCOMC dropped to expose real inventory)",
+    "modern_slug_format": "Modern SV/SWSH sets use a single path segment with the year embedded + set code, e.g. 2023_Pokemon_Scarlet__Violet_-_151_sv2a. Store year='' and the full segment as slug; run_targeted handles year='' as a single segment."
+  },
+  "Base Set": {
+    "year": "1999",
+    "slug": "Pokemon_Base_Set_-_Base",
+    "comc_count": 325,
+    "validated": true
+  },
+  "Jungle": {
+    "year": "1999",
+    "slug": "Pokemon_Jungle_-_Base",
+    "comc_count": 200,
+    "validated": true
+  },
+  "Fossil": {
+    "year": "1999",
+    "slug": "Pokemon_Fossil_-_Base",
+    "comc_count": 210,
+    "validated": true
+  },
+  "Base Set 2": {
+    "year": "2000",
+    "slug": "Pokemon_Base_Set_2_-_Base",
+    "comc_count": 318,
+    "validated": true
+  },
+  "Team Rocket": {
+    "year": "2000",
+    "slug": "Pokemon_Team_Rocket_-_Base",
+    "comc_count": 213,
+    "validated": true
+  },
+  "Gym Heroes": {
+    "year": "2000",
+    "slug": "Pokemon_Gym_Heroes_-_Base",
+    "comc_count": 217,
+    "validated": true
+  },
+  "Gym Challenge": {
+    "year": "2000",
+    "slug": "Pokemon_Gym_Challenge_-_Base",
+    "comc_count": 184,
+    "validated": true
+  },
+  "Neo Genesis": {
+    "year": "2000",
+    "slug": "Pokemon_Neo_Genesis_-_Base",
+    "comc_count": 242,
+    "validated": true
+  },
+  "Neo Discovery": {
+    "year": "2001",
+    "slug": "Pokemon_Neo_Discovery_-_Base",
+    "comc_count": 122,
+    "validated": true
+  },
+  "Neo Revelation": {
+    "year": "2001",
+    "slug": "Pokemon_-_Neo_Revelation_-_Base",
+    "comc_count": 88,
+    "validated": true,
+    "note": "COMC names this set 'Pokemon - Neo Revelation' (extra leading dash), so slug differs from the other Neo sets."
+  },
+  "Neo Destiny": {
+    "year": "2002",
+    "slug": "Pokemon_Neo_Destiny_-_Base",
+    "comc_count": 134,
+    "validated": true
+  },
+  "Legendary Collection": {
+    "year": "2002",
+    "slug": "Pokemon_Legendary_Collection_-_Base",
+    "comc_count": 164,
+    "validated": true
+  },
+  "Expedition": {
+    "year": "2002",
+    "slug": "Pokemon_e-Card_Series_-_Expedition_-_Base",
+    "comc_count": 131,
+    "validated": true
+  },
+  "Aquapolis": {
+    "year": "2003",
+    "slug": "Pokemon_e-Card_Series_-_Aquapolis_-_Base",
+    "comc_count": 78,
+    "validated": true
+  },
+  "Skyridge": {
+    "year": "2003",
+    "slug": "Pokemon_e-Card_Series_-_Skyridge_-_Base",
+    "comc_count": 35,
+    "validated": true
+  },
+  "SV: Scarlet & Violet 151": {
+    "year": "",
+    "slug": "2023_Pokemon_Scarlet__Violet_-_151_sv2a",
+    "comc_count": 650,
+    "validated": true,
+    "note": "Modern format: single path segment (year embedded). 650 ungraded, all NM."
+  },
+  "SV02: Paldea Evolved": {
+    "year": "",
+    "slug": "2023_Pokemon_Scarlet__Violet_-_Paldea_Evolved_PAL",
+    "comc_count": 506,
+    "validated": true,
+    "note": "Scrape-validated: Listings 1-100 of 506, NM. Slug uses '_-_<Name>_<TCGcode PAL>'."
+  },
+  "SV03: Obsidian Flames": {
+    "year": "",
+    "slug": "2023_Pokemon_Scarlet__Violet_Obsidian_Flames_OBF",
+    "comc_count": 480,
+    "validated": true,
+    "note": "Scrape-validated: Listings 1-100 of 480, NM. Display name uses a colon, so slug drops the '_-_' before the set name: '_Violet_Obsidian_Flames_OBF'."
+  },
+  "SV04: Paradox Rift": {
+    "year": "",
+    "slug": "2023_Pokemon_Scarlet__Violet_-_Paradox_Rift_PAR",
+    "validated": true,
+    "note": "Search-confirmed from real COMC card-detail URLs (e.g. /2023/Pokemon_Scarlet__Violet_-_Paradox_Rift_PAR_-_Base/...); not scrape-validated (Firecrawl credits exhausted). Slug uses '_-_<Name>_PAR'.",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
+  },
+  "SV: Paldean Fates": {
+    "year": "",
+    "slug": "2023_Pokemon_Scarlet__Violet_-_Paldean_Fates_PAF",
+    "validated": true,
+    "note": "Search-confirmed from real COMC card-detail URLs (e.g. /2023/Pokemon_Scarlet__Violet_-_Paldean_Fates_PAF_-_Base/...); not scrape-validated (credits exhausted). Slug uses '_-_<Name>_PAF'.",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
+  },
+  "SV05: Temporal Forces": {
+    "year": "",
+    "slug": "2024_Pokemon_Scarlet__Violet_Temporal_Forces_TEF",
+    "validated": true,
+    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2024/Pokemon_Scarlet__Violet_Temporal_Forces_TEF_-_Base/...); not scrape-validated (credits exhausted). 2024 set; colon-name pattern (no '_-_' before name).",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
+  },
+  "SV06: Twilight Masquerade": {
+    "year": "",
+    "slug": "2024_Pokemon_Scarlet__Violet_Twilight_Masquerade_TWM",
+    "validated": true,
+    "note": "Search-confirmed from real COMC card-detail URLs (e.g. /2024/Pokemon_Scarlet__Violet_Twilight_Masquerade_TWM_-_Base/...); not scrape-validated (credits exhausted). Colon-name pattern.",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
+  },
+  "SV: Shrouded Fable": {
+    "year": "",
+    "slug": "2024_Pokemon_Scarlet__Violet_Shrouded_Fable_SFA",
+    "validated": true,
+    "note": "Search-confirmed from real COMC card-detail URLs (e.g. /2024/Pokemon_Scarlet__Violet_Shrouded_Fable_SFA_-_Base/...); not scrape-validated (credits exhausted). Colon-name pattern.",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
+  },
+  "SV07: Stellar Crown": {
+    "year": "",
+    "slug": "2024_Pokemon_SV07_Stellar_Crown_SCR",
+    "validated": true,
+    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2024/Pokemon_SV07_Stellar_Crown_SCR_-_Base/...); not scrape-validated (credits exhausted). NEW naming: 'SV0N_<Name>_<code>' replaces the 'Scarlet__Violet' prefix starting at SV07.",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
+  },
+  "SV08: Surging Sparks": {
+    "year": "",
+    "slug": "2024_Pokemon_SV08_Surging_Sparks",
+    "comc_count": 439,
+    "validated": true,
+    "note": "Scrape-validated: Listings 1-100 of 439, NM. NEW naming 'SV0N_<Name>' but NO trailing TCG code in the browse slug (card-detail path is SV08_Surging_Sparks_-_Base)."
+  },
+  "SV: Prismatic Evolutions": {
+    "year": "",
+    "slug": "2025_Pokemon_SV_Prismatic_Evolutions_PRE",
+    "validated": true,
+    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2025/Pokemon_SV_Prismatic_Evolutions_PRE_-_Base/...); not scrape-validated (credits exhausted). 2025 set; 'SV_<Name>_<code>' pattern (special set, no SV0N number).",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
+  },
+  "SV09: Journey Together": {
+    "year": "",
+    "slug": "2025_Pokemon_SV_Journey_Together_JTG",
+    "validated": true,
+    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2025/Pokemon_SV_Journey_Together_JTG_-_Base/...); not scrape-validated (credits exhausted). 2025; 'SV_<Name>_<code JTG>'.",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
+  },
+  "SV10: Destined Rivals": {
+    "year": "",
+    "slug": "2025_Pokemon_SV_Destined_Rivals_(DRI)",
+    "validated": true,
+    "note": "Search-confirmed from real COMC browse + card-detail URLs (e.g. /2025/Pokemon_SV_Destined_Rivals_(DRI)_-_Base/...); not scrape-validated (credits exhausted). 2025; code is in PARENTHESES not bare suffix: 'SV_Destined_Rivals_(DRI)'. URL-encode '(' ')' if needed.",
+    "validated_at": "2026-06-09",
+    "page1_listings": 100
+  }
+}

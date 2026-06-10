@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Local caches / scraper state (never commit secrets or session cookies)
+.cache/
+browser_state.json
+
+# Keep the results/ directory (the deliverable) but ignore nothing inside it by default.
+# Result CSV/JSON/MD files ARE committed as the GitHub deliverable.
