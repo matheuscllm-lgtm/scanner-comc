@@ -38,9 +38,16 @@ python -m comc_scanner validate-slugs --fetch-mode playwright --no-sheets       
 python -m comc_scanner targeted --era recent --no-sheets
 ```
 
-### Recorrência grátis
-GH Actions exige Firecrawl (cloud sem display + IP datacenter bloqueado pela CF). O caminho
-$0 é **Task Scheduler local** (padrão do sealed scanner). Próximo passo se o operador quiser.
+### Recorrência: MANUAL por decisão do operador (2026-06-09)
+O operador aciona a varredura manualmente — **NÃO criar Task Scheduler/agendamento**.
+(GH Actions exigiria Firecrawl: cloud sem display + IP datacenter bloqueado pela CF.)
+Comando do scan manual (grátis, ~8 min/era):
+```
+python -m comc_scanner targeted --era recent  --fetch-mode playwright --no-sheets --restart
+python -m comc_scanner targeted --era vintage --fetch-mode playwright --no-sheets --restart
+```
+Defaults já aplicados: piso $10 + margem 0.30. Variações: `--min-margin 0.20`,
+`--chase-only`, `--min-margin 0.0` (captura a distribuição inteira pra ler depois).
 
 ### 📊 Panorama completo 2026-06-09 (28 sets, playwright, $0 de custo)
 Varrido com `--min-margin 0.0` + piso $10 pra capturar a DISTRIBUIÇÃO inteira, não só o
