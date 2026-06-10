@@ -1,23 +1,59 @@
 # HANDOFF — Scanner de arbitragem COMC → TCGPlayer (Pokémon)
 
 > Documento de transferência para retomar o trabalho em uma nova sessão. Última
-> atualização: **2026-06-09 (sessão 4)**. Leia a seção 0 abaixo — é a fonte da verdade;
+> atualização: **2026-06-09 (sessão 5)**. Leia a seção 0 abaixo — é a fonte da verdade;
 > as seções 0-bis/12 abaixo são histórico.
 
 ---
 
-## 0. ⭐ RETOMAR AQUI — estado atual (2026-06-09)
+## 0. ⭐ RETOMAR AQUI — estado atual (2026-06-09, sessão 5)
 
-**O scanner está FUNCIONANTE, ÚTIL e HONESTO.** Roda de **dois jeitos**, com ou sem créditos:
+**O scanner está FUNCIONANTE, GRÁTIS (sem Firecrawl) e reorientado pra tese VALUE-BUY.**
+
+### Tese do operador (2026-06-09): value-buy, não só flip
+COMC↔TCGPlayer é o MESMO mercado US → flip imediato é estruturalmente fino (sessões 3-4
+confirmaram: 1-3 deals de ~$1-2). O objetivo agora é **comprar boas cartas com desconto
+e potencial de valorização** (segurar, não flipar). Mudanças que implementam isso:
+- **Piso de preço $10** (`--min-price`, default 10 = regra canônica R$50): some o ruído de $3.
+- **Margem default 0.30** (limiar canônico cross-scanner; passar `--min-margin 0.20` p/ value-buy).
+- **`--chase-only`**: só raridades chase (dropa Common/Uncommon/Rare bulk e raridade
+  desconhecida) — IR/SIR/UR/Hyper/Secret/Double Rare/Holo Rare passam.
+
+### Catálogo: 28 sets validados (15 WotC + 13 modern SV)
+`validate-slugs` (comando NOVO) validou os 9 modern pendentes ao vivo em ~20s via
+playwright (9/9 OK, 100 listagens page-1 cada). Pra revalidar tudo: `--revalidate`.
+
+### 🐞 Fix sessão 5: resolução cross-era no run_targeted
+O fallback fuzzy pareava o slug WotC "Base Set" (1999) com "SV01: Scarlet & Violet Base
+Set" em era=recent (falso positivo cross-era). Agora resolução é só por match EXATO de
+nome/alias normalizado. NÃO reintroduzir containment substring ali.
 
 ```
 # GRÁTIS (sem crédito Firecrawl) — navegador local, é o que está em uso agora:
 python -m comc_scanner targeted --era recent  --fetch-mode playwright --no-sheets   # MODERN
 python -m comc_scanner targeted --era vintage --fetch-mode playwright --no-sheets   # WotC
+python -m comc_scanner validate-slugs --fetch-mode playwright --no-sheets           # catálogo
 
 # Firecrawl (rápido, headless, mas precisa de crédito — esgotou no overnight, 402):
 python -m comc_scanner targeted --era recent --no-sheets
 ```
+
+### Recorrência grátis
+GH Actions exige Firecrawl (cloud sem display + IP datacenter bloqueado pela CF). O caminho
+$0 é **Task Scheduler local** (padrão do sealed scanner). Próximo passo se o operador quiser.
+
+### 📊 Panorama completo 2026-06-09 (28 sets, playwright, $0 de custo)
+Varrido com `--min-margin 0.0` + piso $10 pra capturar a DISTRIBUIÇÃO inteira, não só o
+que passa do limiar (técnica: margem 0 no scan, cortes aplicados na leitura):
+- **Vintage (15 sets WotC):** **0 cartas ≥$10 NM-range no mercado ou abaixo.** Todo o
+  estoque vintage NM ≥$10 da COMC está precificado ACIMA do TCGPlayer.
+- **Modern (13 sets SV):** **23 cartas ≥$10 no/abaixo do market** — todas raridade chase
+  (IR/SIR/UR/Shiny), todas NM, conf 0.95. **Melhor desconto: 13,7%** (Paldean Wooper IR).
+  Nenhuma chega a 20%, muito menos 30%.
+- **Leitura:** COMC modern chase ≥$10 negocia dentro de ~14% do market US. Yield do
+  value-buy a ≥20% = zero hoje; pra ter candidatos o operador precisaria aceitar
+  descontos de 8-14% (decisão de capital dele). Runs repetidas ao longo de semanas podem
+  pegar janelas de sub-precificação — por isso a recorrência local importa.
 
 ### Os dois transportes (`COMC_FETCH_MODE`)
 1. **`playwright` (GRÁTIS, sem crédito)** — patchright + **Chrome real + HEADFUL** auto-resolve
