@@ -4,4 +4,4 @@ Finds cards listed on COMC priced below their habitual TCGPlayer price and repor
 the top deals by gross margin. See README.md for usage.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

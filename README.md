@@ -31,12 +31,45 @@ potencial de valorização**, não só flip imediato.
    *chunk* — a varredura para no orçamento (`--max-run-seconds` / `--max-sets-per-chunk`),
    salva o cursor em `.cache/progress/<era>.json` e **retoma** na próxima execução.
 
-## Entrega dos resultados
+## Entrega dos resultados (FORMATO CANÔNICO — OBRIGATÓRIO)
 
-A cada flush (a cada ~1h e ao fim de cada chunk) o scanner:
-- imprime uma **tabela markdown** no console (renderizada aqui no Claude Code / terminal);
+> Esta é a regra de **como entregar** os resultados ao operador. Vale para qualquer
+> sessão (terminal ou app), inclusive um Claude Code da nuvem que só conhece este repo.
+
+**A entrega é SEMPRE uma tabela markdown colada aqui no chat — nunca um arquivo.**
+Em linguagem simples: ao terminar (ou ao mostrar parcial), você cola a tabela de deals
+direto na conversa. Não mande `.csv`/`.xlsx`/`.json`; o operador lê na hora, no chat.
+Só envie arquivo se o **operador pedir explicitamente** ("me manda o CSV").
+
+**A tabela vem do gerador do próprio scanner — nunca monte uma tabela à mão.**
+A função `comc_scanner/reporter.py::render_markdown(deals, era, top_n)` é a fonte única
+do formato. O scanner já imprime essa tabela em cada flush; para regerar a partir de um
+resultado salvo, leia o `results/comc_deals_<era>_latest.json` e passe os deals por
+`render_markdown`. Montar colunas na mão arrisca esquecer link/flag e diverge do arquivo.
+
+**Colunas canônicas (todas geradas automaticamente):**
+
+| Coluna | O que é |
+| --- | --- |
+| `#` | posição no ranking (margem desc.) |
+| `Margin%` | margem bruta `(TCG − COMC) / TCG` em % |
+| `COMC$` / `TCG$` / `Profit$` | preço de compra na COMC, preço de referência TCGPlayer, lucro bruto |
+| `Card` | **nome da carta + número de coleção** (ex.: `Pikachu 173/165`) |
+| `Set` / `Cond` / `Sub` | set, condição (NM), subtype (Holo/Reverse/…) |
+| `Conf` | confiança do match carta↔TCGPlayer (0–1) |
+| `Flag` | `ok`, ou **`validar`** quando a confiança está abaixo de `0.90` — linha **suspeita a conferir manualmente**, nunca escondida |
+| `Oferta` | link clicável **[oferta](url COMC)** — a listagem na COMC |
+| `Referência` | link clicável **[referência](url TCGPlayer)** — onde conferir o preço de referência |
+
+**Mostre SEMPRE TODOS os deals** (todas as linhas, ordenadas por margem desc.), não uma
+amostra curada. Linhas duvidosas recebem `Flag = validar` em vez de serem cortadas, para
+o operador checar oferta × referência por conta própria. O scanner **não** recomenda
+comprar — só reporta os dados (decisão de capital é do operador).
+
+A cada flush (a cada ~1h e ao fim de cada chunk) o scanner também:
 - grava em `results/`: `comc_deals_<era>_latest.csv` + `.json` (sobrescritos) e snapshots
-  com timestamp UTC. O CSV é amigável p/ **Google Sheets** (é só importar);
+  com timestamp UTC. Esses arquivos são **saída de trabalho interna** (não a entrega) e o
+  CSV é amigável p/ **Google Sheets** se você quiser importar;
 - se houver credenciais, faz push opcional para um **Google Sheet** (degrada p/ CSV se não).
 
 ## Instalação

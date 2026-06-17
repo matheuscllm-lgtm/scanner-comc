@@ -12,9 +12,18 @@ from .models import Deal
 
 log = logging.getLogger("comc_scanner.reporter")
 
+# Confidence at/above which a match is treated as solid; below it the row is
+# tagged "validar" so the operator double-checks the card↔TCGPlayer pairing.
+TRUST_CONFIDENCE = 0.90
+
 # Columns shown in the console/markdown table (compact subset of the full row).
-# `card_number` = Pokémon name + collector number; `comc_url` rendered as a clickable
-# "[oferta](url)" so the offer link travels with each row.
+# This is the CANONICAL delivery table for the chat (see README "Entrega dos
+# resultados" / CLAUDE.md). Always render with this function — never hand-build a
+# table. Each row carries: `card_number` (Pokémon name + collector number),
+# `comc_url` as a clickable "[oferta](url)" (the COMC offer), `tcg_url` as
+# "[referência](url)" (the TCGPlayer price reference the operator verifies), the
+# match `confidence`, and a `flag` ("validar" when confidence is below
+# TRUST_CONFIDENCE) so suspect rows are marked instead of hidden.
 _TABLE_COLS = [
     ("rank", "#"),
     ("margin_pct", "Margin%"),
@@ -26,15 +35,28 @@ _TABLE_COLS = [
     ("condition", "Cond"),
     ("sub_type", "Sub"),
     ("confidence", "Conf"),
-    ("comc_url", "Link"),
+    ("flag", "Flag"),
+    ("comc_url", "Oferta"),
+    ("tcg_url", "Referência"),
 ]
 _MAXW = {"card_number": 34, "set": 26, "condition": 10, "sub_type": 16}
 
 
+def _flag_for(row: dict) -> str:
+    """Per-row review flag: mark low-confidence matches "validar" (never drop them)."""
+    try:
+        conf = float(row.get("confidence") or 0.0)
+    except (TypeError, ValueError):
+        conf = 0.0
+    return "validar" if conf < TRUST_CONFIDENCE else "ok"
+
+
 def _cell(key: str, value: object) -> str:
     s = "" if value is None else str(value)
-    if key == "comc_url":  # render the offer URL as a clickable markdown link
+    if key == "comc_url":  # render the COMC offer URL as a clickable markdown link
         return f"[oferta]({s})" if s else ""
+    if key == "tcg_url":  # render the TCGPlayer price reference as a clickable link
+        return f"[referência]({s})" if s else ""
     w = _MAXW.get(key)
     if w and len(s) > w:
         s = s[: w - 1] + "…"
@@ -51,6 +73,7 @@ def render_markdown(deals: list[Deal], era: str, top_n: int) -> str:
     for rank, deal in enumerate(deals[:top_n], 1):
         row = deal.as_row()
         row["rank"] = rank
+        row["flag"] = _flag_for(row)
         lines.append("| " + " | ".join(_cell(k, row.get(k, "")) for k, _ in _TABLE_COLS) + " |")
     return "\n".join(lines)
 
