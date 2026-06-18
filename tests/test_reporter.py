@@ -1,9 +1,10 @@
 """Offline tests for the canonical chat delivery table (reporter.render_markdown).
 
 These lock the canonical format documented in README "Entrega dos resultados" and
-CLAUDE.md: every row carries the COMC offer link ([oferta]), the TCGPlayer price
-reference link ([referência]), the card name+number, and a per-row review flag
-("validar" for low-confidence matches — never dropped).
+CLAUDE.md: every row carries a single `Links` column joining the COMC offer link
+([oferta]) and the TCGPlayer price reference link ([referência]) with " · " — the
+cross-scanner format shared with MYP/Liga — plus the card name+number and a per-row
+review flag ("validar" for low-confidence matches — never dropped).
 """
 from comc_scanner.models import ComcListing, Deal, TcgPrice, TcgProduct
 from comc_scanner.reporter import TRUST_CONFIDENCE, render_markdown
@@ -50,6 +51,29 @@ def test_table_has_offer_and_reference_links():
     out = render_markdown([_deal()], era="recent", top_n=50)
     assert "[oferta](https://www.comc.com/Cards/1)" in out
     assert "[referência](https://www.tcgplayer.com/product/1)" in out
+
+
+def test_links_merged_into_single_column():
+    """Canonical cross-scanner format: one `Links` column, the two links joined by " · ".
+
+    Locks the merge (no longer separate Oferta/Referência columns) so the COMC table
+    matches MYP (`delivery_links`) and Liga (`_links`)."""
+    out = render_markdown([_deal()], era="recent", top_n=50)
+    header = next(l for l in out.splitlines() if l.lstrip().startswith("| #"))
+    assert "| Links |" in header
+    assert "Oferta" not in header and "Referência" not in header
+    assert (
+        "[oferta](https://www.comc.com/Cards/1) · "
+        "[referência](https://www.tcgplayer.com/product/1)"
+    ) in out
+
+
+def test_links_cell_placeholder_when_no_urls():
+    """Missing links collapse to an em dash "—", mirroring MYP/Liga, never blank/invented."""
+    from comc_scanner.reporter import _links_cell
+
+    assert _links_cell({"comc_url": None, "tcg_url": None}) == "—"
+    assert _links_cell({"comc_url": "https://c/1", "tcg_url": None}) == "[oferta](https://c/1)"
 
 
 def test_card_column_is_name_plus_number():
