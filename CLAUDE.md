@@ -31,9 +31,10 @@ Quando o operador pedir "resultados", "deals", "panorama" ou similar:
 3. **Mostre TODAS as linhas** (ordenadas por margem desc.), não uma amostra curada.
 4. Cada linha traz, automaticamente:
    - `Card` = **nome + número de coleção** da carta (ex.: `Pikachu 173/165`);
-   - `Oferta` = link clicável **[oferta](url COMC)** (a listagem na COMC);
-   - `Referência` = link clicável **[referência](url TCGPlayer)** (onde conferir o
-     preço de referência);
+   - `Links` = **dois links clicáveis numa coluna só** — **[oferta](url COMC)** (a
+     listagem na COMC) **·** **[referência](url TCGPlayer)** (onde conferir o preço).
+     Formato canônico cross-scanner (igual ao MYP/Liga); lidos do deal, nunca
+     inventados (`—` se faltarem);
    - `Flag` = `ok` ou **`validar`** (match com confiança < 0.90 = **suspeito, conferir
      manualmente** — a linha aparece sempre, nunca é escondida).
 5. **Não recomende comprar.** O scanner reporta dados; a decisão de capital é do

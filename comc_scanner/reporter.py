@@ -19,11 +19,11 @@ TRUST_CONFIDENCE = 0.90
 # Columns shown in the console/markdown table (compact subset of the full row).
 # This is the CANONICAL delivery table for the chat (see README "Entrega dos
 # resultados" / CLAUDE.md). Always render with this function — never hand-build a
-# table. Each row carries: `card_number` (Pokémon name + collector number),
-# `comc_url` as a clickable "[oferta](url)" (the COMC offer), `tcg_url` as
-# "[referência](url)" (the TCGPlayer price reference the operator verifies), the
-# match `confidence`, and a `flag` ("validar" when confidence is below
-# TRUST_CONFIDENCE) so suspect rows are marked instead of hidden.
+# table. Each row carries: `card_number` (Pokémon name + collector number), the
+# match `confidence`, a `flag` ("validar" when confidence is below
+# TRUST_CONFIDENCE) so suspect rows are marked instead of hidden, and a single
+# `Links` column ("[oferta](comc_url) · [referência](tcg_url)") — the cross-scanner
+# canonical format shared with MYP (`delivery_links`) and Liga (`_links`).
 _TABLE_COLS = [
     ("rank", "#"),
     ("margin_pct", "Margin%"),
@@ -36,8 +36,7 @@ _TABLE_COLS = [
     ("sub_type", "Sub"),
     ("confidence", "Conf"),
     ("flag", "Flag"),
-    ("comc_url", "Oferta"),
-    ("tcg_url", "Referência"),
+    ("links", "Links"),
 ]
 _MAXW = {"card_number": 34, "set": 26, "condition": 10, "sub_type": 16}
 
@@ -51,12 +50,28 @@ def _flag_for(row: dict) -> str:
     return "validar" if conf < TRUST_CONFIDENCE else "ok"
 
 
+def _links_cell(row: dict) -> str:
+    """Coluna `Links`: "[oferta](comc_url) · [referência](tcg_url)".
+
+    Espelha o formato canônico cross-scanner (MYP `delivery_links`, Liga `_links`):
+    `oferta` = listagem na COMC; `referência` = preço de referência no TCGPlayer. Os
+    dois links são lidos do deal (nunca inventados); emite só os que existirem e "—"
+    se nenhum.
+    """
+    parts = []
+    comc_url = "" if row.get("comc_url") is None else str(row.get("comc_url"))
+    tcg_url = "" if row.get("tcg_url") is None else str(row.get("tcg_url"))
+    if comc_url:
+        parts.append(f"[oferta]({comc_url})")
+    if tcg_url:
+        parts.append(f"[referência]({tcg_url})")
+    return " · ".join(parts) if parts else "—"
+
+
 def _cell(key: str, value: object) -> str:
+    if key == "links":  # pre-built markdown links cell — render verbatim
+        return "" if value is None else str(value)
     s = "" if value is None else str(value)
-    if key == "comc_url":  # render the COMC offer URL as a clickable markdown link
-        return f"[oferta]({s})" if s else ""
-    if key == "tcg_url":  # render the TCGPlayer price reference as a clickable link
-        return f"[referência]({s})" if s else ""
     w = _MAXW.get(key)
     if w and len(s) > w:
         s = s[: w - 1] + "…"
@@ -74,6 +89,7 @@ def render_markdown(deals: list[Deal], era: str, top_n: int) -> str:
         row = deal.as_row()
         row["rank"] = rank
         row["flag"] = _flag_for(row)
+        row["links"] = _links_cell(row)
         lines.append("| " + " | ".join(_cell(k, row.get(k, "")) for k, _ in _TABLE_COLS) + " |")
     return "\n".join(lines)
 

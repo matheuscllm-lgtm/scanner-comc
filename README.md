@@ -58,8 +58,7 @@ resultado salvo, leia o `results/comc_deals_<era>_latest.json` e passe os deals 
 | `Set` / `Cond` / `Sub` | set, condição (NM), subtype (Holo/Reverse/…) |
 | `Conf` | confiança do match carta↔TCGPlayer (0–1) |
 | `Flag` | `ok`, ou **`validar`** quando a confiança está abaixo de `0.90` — linha **suspeita a conferir manualmente**, nunca escondida |
-| `Oferta` | link clicável **[oferta](url COMC)** — a listagem na COMC |
-| `Referência` | link clicável **[referência](url TCGPlayer)** — onde conferir o preço de referência |
+| `Links` | **dois links clicáveis numa coluna só**: `[oferta](url COMC)` (a listagem na COMC) **·** `[referência](url TCGPlayer)` (onde conferir o preço). Formato canônico cross-scanner, igual ao MYP/Liga; lidos do deal, nunca inventados (`—` se faltarem) |
 
 **Mostre SEMPRE TODOS os deals** (todas as linhas, ordenadas por margem desc.), não uma
 amostra curada. Linhas duvidosas recebem `Flag = validar` em vez de serem cortadas, para
