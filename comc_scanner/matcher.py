@@ -74,6 +74,14 @@ def match(
     # name (real COMC "Pokemon" listings include Topps/Bandai/etc. whose set strings
     # can resolve loosely). Require a minimal name affinity as a sanity floor.
     _NAME_FLOOR = 45.0
+    # Minimum lead of the best name over the runner-up for a fuzzy (no-exact-hit)
+    # match to be trusted. Tier 3 already required this; Tier 2 did not, so an
+    # ambiguous near-tie (two products in the set with almost-equal names) was
+    # accepted at 0.85 — a likely wrong-card match. Found via ASI-Evolve
+    # (comc_tiers): adding this gap to Tier 2 took eval precision 0.90 -> 1.0 with
+    # recall unchanged (vs the F1-max candidate that lowered cutoffs and dropped
+    # precision to 0.81). Conservative/precision-first: ambiguous -> no deal.
+    _NAME_GAP = 3.0
     if number_key:
         exact = index.by_set_number.get((set_key, number_key))
         if exact:
@@ -97,12 +105,13 @@ def match(
     if card is None:
         return None
 
-    # Tier 2: number present but no exact hit -> strong name match required
-    if number_key and score >= 90:
+    # Tier 2: number present but no exact hit -> strong name match required,
+    # and clearly ahead of the runner-up (gap gate; reject ambiguous near-ties).
+    if number_key and score >= 90 and (score - runner) >= _NAME_GAP:
         return _build_deal(listing, card, index, settings, 0.85, f"name fuzzy {score:.0f} within set")
 
     # Tier 3: no number -> very strong, unambiguous name match
-    if not number_key and score >= 92 and (score - runner) >= 3:
+    if not number_key and score >= 92 and (score - runner) >= _NAME_GAP:
         return _build_deal(listing, card, index, settings, 0.70, f"name fuzzy {score:.0f} (no number)")
 
     return None

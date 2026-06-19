@@ -86,3 +86,43 @@ def test_no_number_strong_name_tier3():
     assert deal is not None
     assert deal.match_confidence == 0.70
     assert deal.product.name == "Blastoise"
+
+
+def _ambig_index() -> TcgIndex:
+    """Two products in one set whose names tie (normalize-equal) so a listing
+    whose number has no exact (set,number) hit cannot disambiguate them."""
+    products = [
+        {"productId": 10, "name": "Mewtwo", "cleanName": "Mewtwo", "url": "m1",
+         "extendedData": [{"name": "Number", "value": "010/100"}]},
+        {"productId": 11, "name": "Mewtwo", "cleanName": "Mewtwo", "url": "m2",
+         "extendedData": [{"name": "Number", "value": "011/100"}]},
+        {"productId": 12, "name": "Snorlax", "cleanName": "Snorlax", "url": "s1",
+         "extendedData": [{"name": "Number", "value": "012/100"}]},
+    ]
+    prices = [
+        {"productId": pid, "subTypeName": "Holofoil", "lowPrice": 40, "midPrice": 50,
+         "highPrice": 60, "marketPrice": 50, "directLowPrice": None}
+        for pid in (10, 11, 12)
+    ]
+    idx = TcgIndex()
+    idx.add_group(700, "Test Set", "TS", products, prices)
+    return idx
+
+
+def test_tier2_ambiguous_runner_rejected():
+    """ASI-Evolve comc_tiers fix: a Tier-2 match (number present, no exact hit)
+    whose best name ties the runner-up is ambiguous -> rejected, not guessed."""
+    idx, s = _ambig_index(), Settings()
+    L = ComcListing(raw_name="Mewtwo", price=10.0, url="x", set_hint="Test Set",
+                    number_hint="999/100", condition="EX-NM")
+    assert match(L, idx, s, context_set_key="test set") is None
+
+
+def test_tier2_clear_gap_still_accepts():
+    """Control: a Tier-2 match with a clear name lead still accepts at 0.85."""
+    idx, s = _ambig_index(), Settings()
+    L = ComcListing(raw_name="Snorlax", price=10.0, url="x", set_hint="Test Set",
+                    number_hint="999/100", condition="EX-NM")
+    deal = match(L, idx, s, context_set_key="test set")
+    assert deal is not None
+    assert deal.match_confidence == 0.85
