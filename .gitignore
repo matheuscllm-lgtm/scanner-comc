@@ -6,9 +6,17 @@ __pycache__/
 venv/
 .env
 
-# Local caches / scraper state (never commit secrets or session cookies)
+# Local caches / scraper state / browser profiles (never commit secrets or session cookies)
 .cache/
 browser_state.json
+pw_profile*/
+*_profile/
+storage_state*.json
+cookies*.json
 
-# Keep the results/ directory (the deliverable) but ignore nothing inside it by default.
-# Result CSV/JSON/MD files ARE committed as the GitHub deliverable.
+# Run outputs (working data, not source) — keep the directory, ignore its contents
+results/*
+!results/.gitkeep
+
+# Internal session / working notes (kept locally, not published)
+HANDOFF.md
