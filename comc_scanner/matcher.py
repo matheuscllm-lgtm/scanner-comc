@@ -3,7 +3,7 @@
 Tiers (confidence):
   T1 0.95  set + collector number exact (unique)
   T1'0.90  set + number, multiple variants -> disambiguated by name
-  T2 0.85  set known, number absent/garbled, name fuzzy >= 90 within set
+  T2 0.85  set known, number present but no exact hit, name fuzzy >= 90 and clearly ahead of runner-up
   T3 0.70  set known, no number, name fuzzy >= 92 and clearly ahead of runner-up
   reject   set unknown / no confident name / no usable price
 """
