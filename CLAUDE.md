@@ -13,7 +13,7 @@ COMC mais baratas que o preço habitual no TCGPlayer e reporta os melhores deals
 por **margem bruta**. Tese atual = **VALUE-BUY**: comprar boas cartas com desconto
 e potencial de valorização (segurar), não só flip imediato. Roda **grátis** via
 navegador real (Playwright headful). Detalhes técnicos completos: `README.md` e
-`HANDOFF.md` (a seção 0 do HANDOFF é a fonte da verdade do estado).
+este arquivo. (Notas de sessão ficam num `HANDOFF.md` local, fora do repositório.)
 
 ## ⭐ COMO ENTREGAR RESULTADOS (regra dura — não improvisar)
 

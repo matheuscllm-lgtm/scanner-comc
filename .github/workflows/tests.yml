@@ -1,9 +1,13 @@
 name: tests
 
 on:
-  pull_request:
   push:
     branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   offline-tests:
@@ -12,10 +16,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
       - name: Install test deps
         run: python -m pip install --upgrade pip pytest requests rapidfuzz
-      - name: Run offline tests (no network)
-        # All tests under tests/ are offline (no live COMC/TCGCSV); test_parse_real.py
-        # validates the parser against a committed real COMC page fixture.
+      - name: Run offline tests (no network, no browser)
+        # All tests under tests/ are offline and need no real browser: a committed
+        # page fixture stands in for the live storefront, so CI stays green without
+        # installing Chromium. No secrets are used.
         run: python -m pytest -q tests/

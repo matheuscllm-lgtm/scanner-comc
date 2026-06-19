@@ -40,7 +40,6 @@ concurrency:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   scan:
@@ -85,14 +84,16 @@ jobs:
             --max-run-seconds "$BUDGET_INPUT" \
             --no-sheets --restart
 
-      - name: Show deal summary in the run log
+      - name: Row count to the run log
         if: always()
+        # On a public repo the run-log step summary is world-readable, so we do NOT
+        # echo deal rows here — just a count. The actual rows live in the artifact,
+        # which is downloadable only via the Actions UI (still public on a public
+        # repo; see PUBLIC-RELEASE-CHECKLIST.md — prefer running scans locally).
         run: |
-          echo "### COMC deals (latest)" >> "$GITHUB_STEP_SUMMARY"
           if ls results/comc_deals_*_latest.csv >/dev/null 2>&1; then
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            cut -d, -f2,3,4,5,6,7,8,10 results/comc_deals_*_latest.csv | head -55 >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            n=$(cat results/comc_deals_*_latest.csv | grep -c . || true)
+            echo "Scan produced output ($n CSV lines across latest files)." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "(no deals file produced)" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -105,15 +106,13 @@ jobs:
           path: |
             results/comc_deals_*_latest.csv
             results/comc_deals_*_latest.json
-          retention-days: 30
+          retention-days: 7
           if-no-files-found: warn
 
-      - name: Notify on failure
+      - name: Note failure in the run log
         if: failure()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # No public GitHub issue is created (this repo's Issues are disabled and a
+        # failure issue would be world-readable). Failures surface in the run log /
+        # the operator's Actions email notification.
         run: |
-          gh issue create \
-            --title "COMC scan failed: run ${{ github.run_id }}" \
-            --body "Scan failed at $(date -u +'%Y-%m-%d %H:%M UTC'). Logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            || true
+          echo "::error::COMC scan failed for run ${{ github.run_id }} — see the job logs."
