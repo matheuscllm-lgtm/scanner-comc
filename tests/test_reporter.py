@@ -10,7 +10,8 @@ from comc_scanner.models import ComcListing, Deal, TcgPrice, TcgProduct
 from comc_scanner.reporter import TRUST_CONFIDENCE, render_markdown
 
 
-def _deal(*, name="Pikachu", number="173/165", margin=0.30, confidence=0.95):
+def _deal(*, name="Pikachu", number="173/165", margin=0.30, confidence=0.95,
+          price_field="market"):
     product = TcgProduct(
         product_id=1,
         group_id=1,
@@ -33,7 +34,7 @@ def _deal(*, name="Pikachu", number="173/165", margin=0.30, confidence=0.95):
         product=product,
         price=price,
         tcg_reference=100.0,
-        price_field_used="market",
+        price_field_used=price_field,
         sub_type_used="Holofoil",
         margin=margin,
         match_confidence=confidence,
@@ -91,3 +92,57 @@ def test_high_confidence_row_flagged_ok():
     out = render_markdown([_deal(confidence=0.99)], era="recent", top_n=50)
     lines = [l for l in out.splitlines() if "Pikachu" in l]
     assert lines and " ok " in lines[0]
+
+
+def test_market_backed_deal_carries_no_price_tag():
+    """A real `market`-backed reference must NOT be annotated — clean flag only.
+
+    Locks that the common, trustworthy case stays visually unmarked so the
+    fallback annotation actually stands out (honesty signal must be distinct)."""
+    out = render_markdown([_deal(price_field="market", confidence=0.99)], era="recent", top_n=50)
+    line = next(l for l in out.splitlines() if "Pikachu" in l)
+    assert "preço:" not in line
+    assert " ok " in line
+
+
+def test_mid_fallback_deal_is_visually_distinct_from_market():
+    """A `mid`-fallback deal must be distinguishable from a real-market deal in the
+    chat table (the #55/#58 lesson: fallback shown as real is forbidden)."""
+    market_out = render_markdown([_deal(price_field="market")], era="recent", top_n=50)
+    mid_out = render_markdown([_deal(price_field="mid")], era="recent", top_n=50)
+
+    market_line = next(l for l in market_out.splitlines() if "Pikachu" in l)
+    mid_line = next(l for l in mid_out.splitlines() if "Pikachu" in l)
+
+    assert "preço:mid" in mid_line
+    assert "preço:" not in market_line
+    assert mid_line != market_line  # the two surfaces are not identical
+
+
+def test_low_fallback_deal_tagged_preco_low():
+    out = render_markdown([_deal(price_field="low")], era="recent", top_n=50)
+    line = next(l for l in out.splitlines() if "Pikachu" in l)
+    assert "preço:low" in line
+
+
+def test_price_tag_composes_with_validar_flag():
+    """Both honesty signals coexist: a low-confidence AND fallback-priced row shows
+    both "validar" and "preço:<campo>" (neither suppresses the other)."""
+    out = render_markdown(
+        [_deal(confidence=TRUST_CONFIDENCE - 0.05, price_field="low")],
+        era="recent", top_n=50,
+    )
+    line = next(l for l in out.splitlines() if "Pikachu" in l)
+    assert "validar" in line
+    assert "preço:low" in line
+
+
+def test_no_new_columns_added_to_table():
+    """Annotation lives inside the existing Flag column — header is unchanged
+    (no dedicated price-source column added; Links/Card kept intact)."""
+    out = render_markdown([_deal(price_field="mid")], era="recent", top_n=50)
+    header = next(l for l in out.splitlines() if l.lstrip().startswith("| #"))
+    assert "| Flag |" in header
+    assert "| Links |" in header
+    # 12 canonical columns, unchanged.
+    assert header.count("|") == 13
