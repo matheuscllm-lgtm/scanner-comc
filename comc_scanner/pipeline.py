@@ -16,6 +16,7 @@ from .reporter import Reporter
 from .segments import ChunkCursor, TcgSet, select_sets, to_sets
 from .tcg_index import TcgIndex
 from .tcgcsv_client import TcgCsvClient
+from .tcgdex_client import TcgdexClient
 
 log = logging.getLogger("comc_scanner.pipeline")
 
@@ -69,6 +70,8 @@ class Scanner:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.client = TcgCsvClient(settings)
+        # Fallback price source (TCGdex) — used only if TCGCSV fails for a set.
+        self._tcgdex = TcgdexClient(settings) if settings.tcgdex_fallback else None
         self.reporter = Reporter(settings)
         self._stop = False
         try:
@@ -86,9 +89,43 @@ class Scanner:
         for ts in sets:
             if index.has_group(ts.group_id):
                 continue
+            products, prices = self._fetch_set_data(ts)
+            if not products:
+                continue  # no source could price this set; skip (already logged)
+            index.add_group(ts.group_id, ts.name, ts.abbreviation, products, prices)
+
+    def _fetch_set_data(
+        self, ts: TcgSet
+    ) -> tuple[list[dict] | None, list[dict] | None]:
+        """Set products/prices from TCGCSV, falling back to TCGdex on failure/empty.
+
+        Kills the single-source risk: a TCGCSV outage used to raise and abort the whole
+        scan. Now we degrade to TCGdex (the same TCGplayer marketPrice, keyed by the same
+        productId) for that set, and only skip the set if neither source can price it.
+        """
+        try:
             products = self.client.products(ts.group_id)
             prices = self.client.prices(ts.group_id)
-            index.add_group(ts.group_id, ts.name, ts.abbreviation, products, prices)
+            if products and prices:
+                return products, prices
+            log.warning("TCGCSV returned no data for set '%s' (group %s); trying TCGdex.",
+                        ts.name, ts.group_id)
+        except RuntimeError as exc:
+            log.warning("TCGCSV unavailable for set '%s' (%s); trying TCGdex fallback.",
+                        ts.name, exc)
+        if self._tcgdex is None:
+            return None, None
+        try:
+            p2, pr2 = self._tcgdex.set_products_prices(ts.name, ts.abbreviation)
+        except RuntimeError as exc:
+            log.warning("TCGdex fallback also failed for set '%s' (%s).", ts.name, exc)
+            return None, None
+        if p2:
+            log.info("Priced set '%s' via TCGdex fallback (%d products) — TCGCSV was "
+                     "unavailable.", ts.name, len(p2))
+            return p2, pr2
+        log.warning("No price source could provide set '%s'; skipping.", ts.name)
+        return None, None
 
     def _alias_map(self, sets: list[TcgSet]) -> dict[str, TcgSet]:
         amap: dict[str, TcgSet] = {}
