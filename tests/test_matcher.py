@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from comc_scanner.config import Settings  # noqa: E402
-from comc_scanner.matcher import match  # noqa: E402
+from comc_scanner.matcher import match, _set_total_ok  # noqa: E402
 from comc_scanner.models import ComcListing  # noqa: E402
 from comc_scanner.tcg_index import TcgIndex  # noqa: E402
 
@@ -156,3 +156,17 @@ def test_matching_set_total_still_accepts():
                     number_hint="2/102", condition="EX-NM")
     deal = match(L, idx, s, context_set_key="base set")
     assert deal is not None and deal.match_confidence == 0.95
+
+
+def test_set_total_ok_cross_convention_not_rejected():
+    """TG/GG subsets number the denominator differently from the main set. A numeric
+    main-set total vs a letter-prefixed subset total is INCOMPARABLE -> never reject
+    (fix-forward: the original logic dropped legit TG/GG matches)."""
+    assert _set_total_ok("TG12/172", "TG12/TG30") is True   # 172 vs tg30: incomparável
+    assert _set_total_ok("GG01/170", "GG01/GG70") is True
+    # same numbering scheme, genuinely different total -> still rejected (the real guard)
+    assert _set_total_ok("4/102", "4/214") is False
+    assert _set_total_ok("TG12/TG30", "TG05/TG15") is False  # ambos tg, totais diferentes
+    # missing/equal totals -> allowed (unchanged)
+    assert _set_total_ok("4", "4/102") is True
+    assert _set_total_ok("4/102", "4/102") is True

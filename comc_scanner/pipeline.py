@@ -121,8 +121,11 @@ class Scanner:
             log.warning("TCGdex fallback also failed for set '%s' (%s).", ts.name, exc)
             return None, None
         if p2:
-            log.info("Priced set '%s' via TCGdex fallback (%d products) — TCGCSV was "
-                     "unavailable.", ts.name, len(p2))
+            # WARNING (not info): a set served by TCGdex means a slow 1-req/card crawl;
+            # surfacing it explains an otherwise-mysterious slowdown in a run.
+            log.warning("Set '%s' priced via TCGdex fallback (%d products) — TCGCSV was "
+                        "unavailable; this set was SLOW (1 request/card).",
+                        ts.name, len(p2))
             return p2, pr2
         log.warning("No price source could provide set '%s'; skipping.", ts.name)
         return None, None
