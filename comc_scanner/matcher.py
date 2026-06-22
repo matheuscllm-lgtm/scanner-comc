@@ -27,11 +27,19 @@ def _set_total_ok(listing_number: str | None, product_number: str | None) -> boo
     corroborating-signal MISMATCH, so it is rejected (guards loose set resolution and
     keeps the supranumerary '226/217' case honest). A missing total on either side is
     no signal -> allowed; a bare number is never penalized.
+
+    Cross-convention safety: subsets number the denominator differently from the main
+    set (Trainer Gallery 'TG12/TG30', Galarian Gallery 'GG01/GG70', Shiny Vault). If
+    COMC supplies a numeric main-set total ('TG12/172') while TCGCSV carries the subset
+    total ('TG12/TG30'), the two are INCOMPARABLE (digits vs letter-prefixed) -> no
+    signal, never reject (avoids dropping a legit TG/GG match).
     """
     lt = parse_set_total(listing_number)
     pt = parse_set_total(product_number)
     if lt is None or pt is None:
         return True
+    if lt.isdigit() != pt.isdigit():
+        return True  # convenções de denominador diferentes -> incomparável, sem sinal
     return lt == pt
 
 

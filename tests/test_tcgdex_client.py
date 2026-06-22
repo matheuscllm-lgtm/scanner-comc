@@ -75,6 +75,21 @@ def test_adapt_card_none_when_no_tcgplayer_price():
     assert _adapt_card(card) is None
 
 
+def test_adapt_card_skips_non_numeric_productid_without_crashing():
+    # productId não-numérico não pode estourar (ValueError escaparia do fallback).
+    card = _full_card()
+    card["pricing"]["tcgplayer"]["holofoil"]["productId"] = "not-a-number"
+    assert _adapt_card(card) is None                 # única finish ruim -> None, sem crash
+
+
+def test_adapt_card_skips_only_the_bad_finish():
+    card = _full_card()
+    card["pricing"]["tcgplayer"]["normal"] = {"productId": "xyz", "marketPrice": 1.0}
+    product, prices = _adapt_card(card)              # holofoil (boa) ainda resolve
+    assert product["productId"] == 675834
+    assert all(p["productId"] == 675834 for p in prices)   # 'normal' ruim foi pulada
+
+
 # --- set resolution + whole-set fetch (HTTP stubbed) ------------------------
 class _StubTcgdex(TcgdexClient):
     """TcgdexClient with _get_json replaced by an in-memory fixture router."""

@@ -57,7 +57,10 @@ def _adapt_card(full: dict) -> tuple[dict, list[dict]] | None:
     for finish, data in tcgplayer.items():
         if not isinstance(data, dict) or data.get("productId") is None:
             continue
-        product_id = int(data["productId"])  # mesmo productId nas finishes da carta
+        try:
+            product_id = int(data["productId"])  # mesmo productId nas finishes da carta
+        except (TypeError, ValueError):
+            continue  # productId não-numérico (improvável) — pula a finish, não quebra
         sub = _FINISH_TO_SUBTYPE.get(finish, finish.replace("-", " ").title())
         row = {"productId": product_id, "subTypeName": sub}
         for field in _PRICE_FIELDS:
