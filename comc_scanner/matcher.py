@@ -12,16 +12,39 @@ from __future__ import annotations
 from .config import Settings
 from .margin import get_margin_fn
 from .models import ComcListing, Deal, TcgCard
-from .normalize import fuzzy_ratio, normalize_name, parse_number, subtype_hint
+from .normalize import (
+    fuzzy_ratio, normalize_name, parse_number, parse_set_total, subtype_hint,
+)
 from .tcg_index import TcgIndex
 
 
-def _best_name(cards: list[TcgCard], norm_name: str) -> tuple[TcgCard | None, float, float]:
-    """Return (best_card, best_score, runner_up_score)."""
+def _set_total_ok(listing_number: str | None, product_number: str | None) -> bool:
+    """False only when listing and product BOTH carry a set-total and they disagree.
+
+    A collector number like '4/102' fingerprints its set via the '/102' denominator.
+    When the COMC listing and a candidate product both expose a set-total and the two
+    differ, the candidate is from a different print run/set than the listing — a
+    corroborating-signal MISMATCH, so it is rejected (guards loose set resolution and
+    keeps the supranumerary '226/217' case honest). A missing total on either side is
+    no signal -> allowed; a bare number is never penalized.
+    """
+    lt = parse_set_total(listing_number)
+    pt = parse_set_total(product_number)
+    if lt is None or pt is None:
+        return True
+    return lt == pt
+
+
+def _best_name(
+    cards: list[TcgCard], norm_name: str, listing_number: str | None = None,
+) -> tuple[TcgCard | None, float, float]:
+    """Return (best_card, best_score, runner_up_score), skipping set-total conflicts."""
     best: TcgCard | None = None
     best_score = -1.0
     runner = -1.0
     for card in cards:
+        if not _set_total_ok(listing_number, card.product.number):
+            continue  # different set-total -> wrong set/print run, not a candidate
         score = fuzzy_ratio(norm_name, normalize_name(card.product.name))
         if score > best_score:
             runner = best_score
@@ -85,12 +108,17 @@ def match(
     if number_key:
         exact = index.by_set_number.get((set_key, number_key))
         if exact:
+            # Drop exact-numerator hits whose set-total contradicts the listing's
+            # (a coincidental numerator from a mis-resolved set / different print run).
+            exact = [c for c in exact
+                     if _set_total_ok(listing.number_hint, c.product.number)]
+        if exact:
             if len(exact) == 1:
                 score = fuzzy_ratio(norm_name, normalize_name(exact[0].product.name))
                 if not norm_name or score >= _NAME_FLOOR:
                     return _build_deal(listing, exact[0], index, settings, 0.95, "set+number exact")
             else:
-                card, score, _ = _best_name(exact, norm_name)
+                card, score, _ = _best_name(exact, norm_name, listing.number_hint)
                 if card is not None and score >= _NAME_FLOOR:
                     return _build_deal(
                         listing, card, index, settings, 0.90,
@@ -101,7 +129,7 @@ def match(
     if not candidates:
         return None
 
-    card, score, runner = _best_name(candidates, norm_name)
+    card, score, runner = _best_name(candidates, norm_name, listing.number_hint)
     if card is None:
         return None
 

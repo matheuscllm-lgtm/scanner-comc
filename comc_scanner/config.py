@@ -138,6 +138,11 @@ class Settings:
 
     # TCGCSV / HTTP
     tcgcsv_force_refresh: bool = False
+    # Price fallback: when tcgcsv.com is unreachable/empty for a set, reconstruct its
+    # prices from TCGdex (the SAME TCGplayer marketPrice, keyed by the same productId).
+    # Emergency fallback only (TCGdex is 1 request/card -> slow); on by default, triggers
+    # only on a TCGCSV failure. Set TCGDEX_FALLBACK=0 to disable.
+    tcgdex_fallback: bool = True
     http_user_agent: str = "comc-scanner/0.1 (+https://github.com/matheuscllm-lgtm/scanner-comc)"
 
     # Google Sheets (optional)
@@ -199,6 +204,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         max_sets_per_chunk=_get_int("MAX_SETS_PER_CHUNK", 0),
         max_pages_per_set=_get_int("MAX_PAGES_PER_SET", 0),
         tcgcsv_force_refresh=_get_bool("TCGCSV_FORCE_REFRESH", False),
+        tcgdex_fallback=_get_bool("TCGDEX_FALLBACK", True),
         http_user_agent=_get("HTTP_USER_AGENT")
         or "comc-scanner/0.1 (+https://github.com/matheuscllm-lgtm/scanner-comc)",
         gsheets_credentials_json=_get("GOOGLE_SHEETS_CREDENTIALS_JSON"),
