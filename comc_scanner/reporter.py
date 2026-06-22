@@ -16,12 +16,23 @@ log = logging.getLogger("comc_scanner.reporter")
 # tagged "validar" so the operator double-checks the card↔TCGPlayer pairing.
 TRUST_CONFIDENCE = 0.90
 
+# The TCGCSV reference price uses a fallback chain market -> mid -> low (tracked
+# end-to-end as `price_field`). "market" is a real observed sale price; "mid"/"low"
+# are derived/listing-based and less reliable. A deal whose margin rests on a
+# fallback must look DIFFERENT from a real-market one in the operator's primary
+# surface (same honesty lesson as MYP's "fallback shown as real", #55/#58), so
+# non-"market" rows get an explicit "preço:<campo>" tag added to the Flag column.
+# "market" rows stay clean — only fallback rows are marked.
+TRUSTED_PRICE_FIELD = "market"
+
 # Columns shown in the console/markdown table (compact subset of the full row).
 # This is the CANONICAL delivery table for the chat (see README "Entrega dos
 # resultados" / CLAUDE.md). Always render with this function — never hand-build a
 # table. Each row carries: `card_number` (Pokémon name + collector number), the
 # match `confidence`, a `flag` ("validar" when confidence is below
-# TRUST_CONFIDENCE) so suspect rows are marked instead of hidden, and a single
+# TRUST_CONFIDENCE, plus "preço:<campo>" when the reference price is a mid/low
+# fallback rather than a real market sale) so suspect rows are marked instead of
+# hidden, and a single
 # `Links` column ("[oferta](comc_url) · [referência](tcg_url)") — the cross-scanner
 # canonical format shared with MYP (`delivery_links`) and Liga (`_links`).
 _TABLE_COLS = [
@@ -42,12 +53,26 @@ _MAXW = {"card_number": 34, "set": 26, "condition": 10, "sub_type": 16}
 
 
 def _flag_for(row: dict) -> str:
-    """Per-row review flag: mark low-confidence matches "validar" (never drop them)."""
+    """Per-row review flag.
+
+    Two honesty signals, composed:
+    - low-confidence match  -> "validar" (else "ok"), never dropped;
+    - reference price not backed by a real "market" sale (mid/low fallback)
+      -> append "preço:<campo>" so a fallback-backed deal is visually distinct
+      from a real-market one. "market" rows carry no price tag.
+    e.g. "ok · preço:mid", "validar · preço:low".
+    """
     try:
         conf = float(row.get("confidence") or 0.0)
     except (TypeError, ValueError):
         conf = 0.0
-    return "validar" if conf < TRUST_CONFIDENCE else "ok"
+    flag = "validar" if conf < TRUST_CONFIDENCE else "ok"
+
+    price_field = row.get("price_field")
+    price_field = "" if price_field is None else str(price_field).strip()
+    if price_field and price_field != TRUSTED_PRICE_FIELD:
+        flag = f"{flag} · preço:{price_field}"
+    return flag
 
 
 def _links_cell(row: dict) -> str:
