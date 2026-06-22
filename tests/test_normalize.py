@@ -5,7 +5,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from comc_scanner.normalize import (  # noqa: E402
-    detect_graded, normalize_name, normalize_set, parse_number, set_aliases, subtype_hint,
+    detect_graded, normalize_name, normalize_set, parse_number, parse_set_total,
+    set_aliases, subtype_hint,
 )
 
 
@@ -13,6 +14,19 @@ def test_parse_number():
     assert parse_number("021/128") == "21"
     assert parse_number("21/128") == "21"
     assert parse_number("4/102") == "4"
+
+
+def test_parse_set_total():
+    # denominator side, normalized the same way across sources
+    assert parse_set_total("001/217") == "217"
+    assert parse_set_total("4/102") == "102"
+    assert parse_set_total("021/128") == "128"
+    assert parse_set_total("TG12/TG30") == "tg30"
+    # no denominator -> no signal
+    assert parse_set_total("19") is None
+    assert parse_set_total("SV107") is None
+    assert parse_set_total("") is None
+    assert parse_set_total(None) is None
     assert parse_number("TG12/TG30") == "tg12"
     assert parse_number("SV107") == "sv107"
     assert parse_number("SWSH250") == "swsh250"

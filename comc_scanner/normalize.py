@@ -102,6 +102,30 @@ def parse_number(s: str | None) -> str | None:
     return numerator
 
 
+def parse_set_total(s: str | None) -> str | None:
+    """Canonical SET-TOTAL key (denominator side) of a collector number, or None.
+
+    The "/217" in "001/217" fingerprints the set — a strong corroborating signal a
+    bare numerator throws away. "4/102" -> "102", "021/128" -> "128",
+    "TG12/TG30" -> "tg30". No denominator ("19", "SV107") -> None (no signal).
+    """
+    if not s:
+        return None
+    token = s.strip().split()[0]
+    parts = token.split("/")
+    if len(parts) < 2:
+        return None
+    total = re.sub(r"[^a-z0-9]", "", parts[1].strip().lower())
+    if not total:
+        return None
+    if total.isdigit():
+        return str(int(total))  # strip leading zeros
+    m = re.match(r"^([a-z]+)0*([0-9]+)$", total)
+    if m:
+        return f"{m.group(1)}{int(m.group(2))}"
+    return total
+
+
 def subtype_hint(listing_name: str, condition: str, rarity: str | None) -> str:
     """Best-guess TCGplayer subtype from a listing's text signals.
 

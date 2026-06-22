@@ -126,3 +126,33 @@ def test_tier2_clear_gap_still_accepts():
     deal = match(L, idx, s, context_set_key="test set")
     assert deal is not None
     assert deal.match_confidence == 0.85
+
+
+def test_set_total_conflict_rejected():
+    """Set-total cross-validation: a listing whose '/total' contradicts the product's
+    is rejected even with a matching numerator + name (guards a coincidental numerator
+    from a mis-resolved set / different print run)."""
+    idx, s = _index(), Settings()
+    # numerator 2 hits Blastoise 002/102, but the listing's total 999 != 102 -> reject.
+    L = ComcListing(raw_name="Blastoise", price=10.0, url="x", set_hint="Base Set",
+                    number_hint="2/999", condition="EX-NM")
+    assert match(L, idx, s, context_set_key="base set") is None
+
+
+def test_bare_number_not_penalized_by_set_total_guard():
+    """A bare numerator (no '/total') carries no set-total signal -> still matches."""
+    idx, s = _index(), Settings()
+    L = ComcListing(raw_name="Blastoise", price=10.0, url="x", set_hint="Base Set",
+                    number_hint="2", condition="EX-NM")
+    deal = match(L, idx, s, context_set_key="base set")
+    assert deal is not None and deal.product.name == "Blastoise"
+    assert deal.match_confidence == 0.95
+
+
+def test_matching_set_total_still_accepts():
+    """Control: when the set-totals agree, the match is unaffected (Tier-1 exact)."""
+    idx, s = _index(), Settings()
+    L = ComcListing(raw_name="Blastoise", price=10.0, url="x", set_hint="Base Set",
+                    number_hint="2/102", condition="EX-NM")
+    deal = match(L, idx, s, context_set_key="base set")
+    assert deal is not None and deal.match_confidence == 0.95
