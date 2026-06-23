@@ -58,9 +58,11 @@ Quando o operador pedir "resultados", "deals", "panorama" ou similar:
 5. **Não recomende comprar.** O scanner reporta dados; a decisão de capital é do
    operador. Pode comentar quais linhas estão `validar`, mas não diga "compre".
 
-A especificação completa das colunas está no `README.md`, seção
-**"Entrega dos resultados (FORMATO CANÔNICO — OBRIGATÓRIO)"**. Os testes em
-`tests/test_reporter.py` travam esse formato (links + flag + nome+número).
+A especificação completa das colunas é o próprio código: as colunas e a ordem
+vivem em `comc_scanner/reporter.py` (`_TABLE_COLS` + a função
+`render_markdown`), e os testes em `tests/test_reporter.py` travam esse formato
+(links + flag + nome+número). A regra de entrega para o operador é a seção
+**"⭐ COMO ENTREGAR RESULTADOS"** acima, neste mesmo arquivo.
 
 ## Como rodar (grátis, navegador local headful)
 

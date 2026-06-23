@@ -51,6 +51,21 @@ def _load_dotenv(path: Path) -> None:
         os.environ.setdefault(key, value)
 
 
+def clean_secret(value: str | None) -> str:
+    """Sanitize a secret (API key/token) read from env/.env/CI secret.
+
+    Removes a BOM (U+FEFF) and zero-width space (U+200B) plus surrounding
+    whitespace. HTTP headers are encoded as latin-1; a BOM accidentally glued
+    to a key (file saved as UTF-8-with-BOM, copy/paste from a site) becomes
+    `UnicodeEncodeError: 'latin-1' codec can't encode '\ufeff'` and kills
+    every request -- the same bug that aborted the CT/MYP scans. `str.strip()`
+    does NOT remove a BOM, so we strip it explicitly. Returns "" if empty.
+    """
+    if value is None:
+        return ""
+    return value.replace("\ufeff", "").replace("\u200b", "").strip()
+
+
 def _get(key: str, default: str = "") -> str:
     return os.environ.get(key, default).strip()
 
@@ -179,7 +194,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         comc_request_delay_s=_get_float("COMC_REQUEST_DELAY_SECONDS", 4.0),
         comc_headless=_get_bool("COMC_BROWSER_HEADLESS", True),
         comc_fetch_mode=(_get("COMC_FETCH_MODE", "firecrawl") or "firecrawl").lower(),
-        firecrawl_api_key=_get("FIRECRAWL_API_KEY"),
+        firecrawl_api_key=clean_secret(_get("FIRECRAWL_API_KEY")),
         firecrawl_wait_ms=_get_int("FIRECRAWL_WAIT_MS", 12000),
         firecrawl_proxy=_get("FIRECRAWL_PROXY", "stealth") or "stealth",
         comc_profile_dir=_get("COMC_PROFILE_DIR", str(CACHE_DIR / "pw_profile_comc"))
