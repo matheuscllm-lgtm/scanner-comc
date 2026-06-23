@@ -21,6 +21,8 @@ import time
 import urllib.error
 import urllib.request
 
+from .config import clean_secret
+
 log = logging.getLogger("comc_scanner.firecrawl")
 
 FIRECRAWL_V2 = "https://api.firecrawl.dev/v2/scrape"
@@ -109,7 +111,13 @@ class ComcFirecrawlFetcher:
         wait_ms: int = 12000, timeout: int = 180, http_retries: int = 2,
         block_retries: int = 3,
     ):
-        self.api_key = api_key or os.environ.get("FIRECRAWL_API_KEY", "").strip()
+        # clean_secret strips BOM/zero-width that `.strip()` misses; a BOM glued
+        # to the key would make `"Bearer " + key` un-encodable as a latin-1 HTTP
+        # header (the bug family that aborted CT/MYP). Sanitize both the passed
+        # value and the env fallback.
+        self.api_key = clean_secret(api_key) or clean_secret(
+            os.environ.get("FIRECRAWL_API_KEY", "")
+        )
         if not self.api_key:
             raise RuntimeError(
                 "FIRECRAWL_API_KEY is not set; cannot fetch COMC via Firecrawl. "
