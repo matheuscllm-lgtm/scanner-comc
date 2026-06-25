@@ -21,7 +21,7 @@ Erros recorrentes (3 famílias — detalhe no manual):
 2. **Git:** galho ou `main` local defasado por squash-merge PARECE pendência. O teste real de "já mergeado" é `git diff --stat origin/main <galho>` estar vazio (não `git merge-base`).
 3. **Honestidade de preço:** inflação de referência, fallback tratado como real, NM frouxo → sempre validar versão/condição e rotular fallback.
 
-**Este scanner:** referência de preço = `tcgcsv.com` (primário; campo market → mid → low, rastreado em `price_field`), com **fallback automático pro TCGdex** (`tcgdex_client.py`) se o tcgcsv cair/vier vazio num set — o TCGdex serve o MESMO `marketPrice` do TCGplayer, casado pelo MESMO `productId` (não é preço inventado nem estimativa; é outro espelho). É fallback de emergência (1 request/carta → lento); liga sozinho só na falha, desliga com `TCGDEX_FALLBACK=0`. Chaves = `FIRECRAWL_API_KEY` (só pro scan na nuvem, hoje dormente; roda local headful).
+**Este scanner:** referência de preço = `tcgcsv.com` (campo market → mid → low, rastreado em `price_field` e sinalizado no chat) → **fallback TCGdex** (mesmo marketPrice do TCGplayer por productId, quando o tcgcsv falha num set); chaves = `FIRECRAWL_API_KEY` (só pro scan na nuvem, hoje dormente; roda local headful).
 
 ## O que este projeto é
 
