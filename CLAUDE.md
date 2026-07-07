@@ -40,12 +40,20 @@ Quando o operador pedir "resultados", "deals", "panorama" ou similar:
 1. **Entrega = uma tabela markdown colada AQUI no chat.** Nunca mande arquivo
    (`.csv`/`.xlsx`/`.json`) por padrão. O operador lê na conversa. Só gere/envie
    arquivo se ele **pedir explicitamente** ("me manda o CSV").
-2. **A tabela vem do gerador do scanner — NUNCA monte uma tabela à mão.** A função
-   `comc_scanner/reporter.py::render_markdown(deals, era, top_n)` é a fonte única
-   do formato. O scanner já a imprime a cada flush. Para regerar de um resultado
-   salvo, carregue `results/comc_deals_<era>_latest.json` e passe os deals por
-   `render_markdown`. Montar à mão arrisca esquecer um link ou a flag e diverge do
-   arquivo gravado.
+2. **A entrega sai da ferramenta `comc_summary.py` — NUNCA monte uma tabela à mão**
+   (espelho do `myp_summary.py` do MYP; substitui a instrução antiga de regenerar
+   via `render_markdown` na mão):
+   ```bash
+   python comc_summary.py results/comc_deals_<era>_latest.json -o results/comc-grupo<N>-<data>.md --group <N>
+   ```
+   Cole o `.md` gerado **VERBATIM**. Ele traz o cabeçalho com contagens + a linha
+   de honestidade "Cobertura de preço market" (market/mid/low) e DUAS seções —
+   🟢 deals confiáveis (confiança ≥0.90 E preço market) e ⚠️ validar manualmente
+   (confiança baixa e/ou preço mid/low, incluindo o balde low-confidence) — todas
+   ordenadas por margem desc. A formatação das linhas tem UMA fonte:
+   `comc_scanner/reporter.py` (`render_rows_table`/`render_row_line`, as mesmas
+   funções do `render_markdown` que o scanner imprime a cada flush). Montar à mão
+   arrisca esquecer um link ou a flag e diverge do arquivo gravado.
 3. **Mostre TODAS as linhas** (ordenadas por margem desc.), não uma amostra curada.
 4. Cada linha traz, automaticamente:
    - `Card` = **nome + número de coleção** da carta (ex.: `Pikachu 173/165`);
@@ -66,12 +74,26 @@ vivem em `comc_scanner/reporter.py` (`_TABLE_COLS` + a função
 
 ## Como rodar (grátis, navegador local headful)
 
+> 🎯 **Skill `scan-comc`** (`.claude/skills/scan-comc/SKILL.md`): quando o
+> operador pedir pra "rodar o COMC", o agente **pergunta qual dos 4 grupos**
+> rodar (2 grupos SV moderno + 2 grupos WotC vintage — fonte canônica:
+> `comc_scanner/groups.py`), roda um por vez e entrega via `comc_summary.py`.
+
 ```bash
-# modern (SV) e vintage (WotC); piso $10 + margem 0.30 já são default:
+# listar os 4 grupos canônicos (sem rede):
+python -m comc_scanner list-groups
+
+# rodar POR GRUPO (allowlist + era derivadas do grupo; SV=recent, WotC=vintage);
+# piso $10 + margem 0.30 já são default:
+python -m comc_scanner targeted --group 1 --fetch-mode playwright --headful --no-sheets --restart
+
+# rota antiga por era continua funcionando (backward compat):
 python -m comc_scanner targeted --era recent  --fetch-mode playwright --no-sheets --restart
 python -m comc_scanner targeted --era vintage --fetch-mode playwright --no-sheets --restart
 ```
 
+`--group` e `--sets` são mutuamente exclusivos; `--group` dispensa `--era`
+(se passar um `--era` conflitante, o grupo manda e sai um warning).
 Variações úteis: `--min-margin 0.20` (afrouxa o limiar p/ value-buy),
 `--chase-only` (só raridades de perseguição), `--min-margin 0.0` (captura a
 distribuição inteira pra ler depois). `python -m comc_scanner --help` lista tudo.
