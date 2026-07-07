@@ -177,10 +177,10 @@ vazam) —, só que o mecanismo é banda + allowlist, não a string literal `"NM
 ## Testes
 
 ```bash
-python -m pytest tests/    # 77 testes — offline, sem rede, sem browser
+python -m pytest tests/    # 82 testes — offline, sem rede, sem browser
 ```
 
-(Contagem verificada em 2026-07-06 via `pytest --collect-only`; se divergir,
+(Contagem verificada em 2026-07-07 via `pytest --collect-only`; se divergir,
 vale o que o comando disser.) `tests/fixtures/` traz páginas COMC reais salvas;
 `tests/test_reporter.py` trava o formato canônico de entrega.
 
