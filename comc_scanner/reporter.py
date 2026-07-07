@@ -103,20 +103,36 @@ def _cell(key: str, value: object) -> str:
     return s.replace("|", "/")
 
 
+def table_header_lines() -> list[str]:
+    """Markdown header + separator for the canonical delivery table."""
+    header = "| " + " | ".join(label for _, label in _TABLE_COLS) + " |"
+    sep = "| " + " | ".join("---" for _ in _TABLE_COLS) + " |"
+    return [header, sep]
+
+
+def render_row_line(row: dict, rank: int) -> str:
+    """One canonical table line from a flat deal row (Deal.as_row() dict or the
+    same dict re-read from the Reporter JSON/CSV). Computes flag + Links here so
+    every consumer (live scan table, comc_summary.py) shares ONE format source."""
+    row = dict(row)  # don't mutate the caller's row
+    row["rank"] = rank
+    row["flag"] = _flag_for(row)
+    row["links"] = _links_cell(row)
+    return "| " + " | ".join(_cell(k, row.get(k, "")) for k, _ in _TABLE_COLS) + " |"
+
+
+def render_rows_table(rows: list[dict]) -> str:
+    """Full canonical table (header + every row, ranked in the given order)."""
+    lines = table_header_lines()
+    lines.extend(render_row_line(row, rank) for rank, row in enumerate(rows, 1))
+    return "\n".join(lines)
+
+
 def render_markdown(deals: list[Deal], era: str, top_n: int) -> str:
     title = f"### COMC deals — era: {era} — top {min(len(deals), top_n)} (margem desc.)"
     if not deals:
         return title + "\n\n_(nenhum deal acima do limiar ainda)_"
-    header = "| " + " | ".join(label for _, label in _TABLE_COLS) + " |"
-    sep = "| " + " | ".join("---" for _ in _TABLE_COLS) + " |"
-    lines = [title, "", header, sep]
-    for rank, deal in enumerate(deals[:top_n], 1):
-        row = deal.as_row()
-        row["rank"] = rank
-        row["flag"] = _flag_for(row)
-        row["links"] = _links_cell(row)
-        lines.append("| " + " | ".join(_cell(k, row.get(k, "")) for k, _ in _TABLE_COLS) + " |")
-    return "\n".join(lines)
+    return "\n".join([title, "", render_rows_table([d.as_row() for d in deals[:top_n]])])
 
 
 class Reporter:
