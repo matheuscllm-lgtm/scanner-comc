@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "comc-scanner"
 version = "0.2.0"
-description = "COMC -> TCGPlayer arbitrage scanner for Pokemon TCG singles (gross margin > 20%)"
+description = "COMC -> TCGPlayer arbitrage scanner for Pokemon TCG singles (gross margin > 30%)"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -14,7 +14,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-comc = ["playwright>=1.44", "playwright-stealth>=1.0.6", "selectolax>=0.3"]
+# patchright (a playwright stealth fork) is preferred at runtime when installed —
+# comc_scraper auto-detects it and falls back to plain playwright.
+comc = ["playwright>=1.44"]
 sheets = ["gspread>=6.0", "google-auth>=2.29"]
 
 [project.scripts]

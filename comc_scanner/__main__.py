@@ -155,7 +155,8 @@ def main(argv: list[str] | None = None) -> int:
         for name, count in sorted(results.items()):
             status = "OK" if count > 0 else ("CF-BLOCK" if count < 0 else "EMPTY")
             print(f"  {status:8s} {name}  (page-1 listings: {max(count, 0)})")
-        return 0 if results and all(c > 0 for c in results.values()) else (0 if not results else 1)
+        # 0 when every checked slug validated (or nothing was pending); 1 otherwise.
+        return 0 if all(c > 0 for c in results.values()) else 1
     if args.command == "refresh-prices":
         scanner.refresh_prices(era)
     elif args.command == "dry-run":

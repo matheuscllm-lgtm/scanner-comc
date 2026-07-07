@@ -16,7 +16,8 @@ cp .env.example .env          # adjust variables (all optional, defaults shown)
 ```
 
 The core (price load, matching, ranking, report) runs with `requests` + stdlib.
-`playwright`, `selectolax`, `rapidfuzz` and `gspread` are optional at runtime.
+`playwright` (or its stealth fork `patchright`, preferred when installed),
+`rapidfuzz` and `gspread` are optional at runtime.
 
 ## Usage
 

@@ -8,8 +8,8 @@ rapidfuzz>=3.9              # fast fuzzy name matching (falls back to stdlib dif
 
 # --- COMC scraping (only needed for live COMC runs; lazy-imported) ---
 playwright>=1.44            # real Chromium to clear COMC's Cloudflare challenge
-playwright-stealth>=1.0.6   # reduce headless fingerprinting (optional)
-selectolax>=0.3            # fast HTML parsing (falls back to stdlib html.parser if absent)
+# patchright                # OPTIONAL stealth fork of playwright; comc_scraper prefers it
+#                           # when installed (better Cloudflare Turnstile auto-solve)
 
 # --- Optional Google Sheets push (lazy-imported; CSV is written regardless) ---
 gspread>=6.0
