@@ -126,7 +126,7 @@ contrário do MYP/Liga — ver a tabela de convenções no bloco da frota acima.
 | `refresh-prices` | força re-download do snapshot de preços do tcgcsv |
 | `dry-run` | casa/reporta uma fixture local (`--listings` JSON ou `--html` salvo), sem COMC ao vivo |
 | `capture` | salva uma página COMC renderizada em disco (precisa de Playwright) |
-| `warm` | **aquecimento headful**: abre janela do navegador pra limpar o Cloudflare uma vez; depois disso runs `--fetch-mode playwright` funcionam **headless e grátis** (o cookie `cf_clearance` fica no perfil e é reusado — sem Firecrawl) |
+| `warm` | **aquecimento headful**: abre janela do navegador pra limpar o Cloudflare uma vez; depois disso runs `--fetch-mode playwright` continuam **HEADFUL** (o código força headful — Turnstile só resolve em navegador real com janela; em servidor exige display virtual), mas ficam **grátis e sem intervenção** (o cookie `cf_clearance` fica no perfil e é reusado — sem Firecrawl) |
 | `parse-file` | imprime os listings parseados de uma página COMC salva (`--html`) |
 | `validate-slugs` | valida ao vivo entradas pendentes de `comc_set_slugs.json` (scrape da página 1 de cada; `--revalidate` re-testa as já validadas) |
 
@@ -142,10 +142,12 @@ dispensa `--era`), `--max-pages`, `--max-sets-per-chunk`, `--max-run-seconds`,
 - **Checkpoint/retomada:** o progresso por era fica em `.cache/progress/<era>.json`
   (`ChunkCursor` em `segments.py`). `--restart` = ignora o cursor salvo e
   recomeça a era do zero; sem ele, o scan retoma de onde parou.
-- **Configuração por env vars:** `config.py` lê ~30 variáveis de ambiente (via
+- **Configuração por env vars:** `config.py` lê ~32 variáveis de ambiente (via
   `.env` local — `DEFAULT_ERA`, `COMC_CONDITION_BAND`, `COMC_FETCH_MODE`,
   `TCGDEX_FALLBACK`, `FIRECRAWL_*`, `GOOGLE_SHEETS_*` etc.); `.env.example` na
-  raiz lista todas com os defaults. O `.env` é gitignored (nunca versionar chave).
+  raiz lista quase todas com os defaults (`TCGDEX_FALLBACK` e
+  `COMC_EXCLUDE_VARIANTS` existem só como env, sem entrada no exemplo). O `.env`
+  é gitignored (nunca versionar chave).
 - **Google Sheets (opcional):** o reporter pode empurrar os deals pra uma
   planilha Google (`GOOGLE_SHEETS_CREDENTIALS_JSON`/`GOOGLE_SHEETS_ID`/
   `GOOGLE_SHEETS_WORKSHEET`). `--no-sheets` desliga esse push — é o que os
@@ -221,7 +223,7 @@ comc_scanner/
   config.py            Settings + ~30 env vars + clean_secret (anti-BOM) + paths (.cache/, results/)
   groups.py            os 4 grupos canônicos de sets (2 SV moderno + 2 WotC vintage) — usados por --group
   pipeline.py          orquestra scan → match → filtros (NM/EN) → flush de resultados
-  comc_scraper.py      navegação COMC via Playwright (headful warm-up → headless com cf_clearance)
+  comc_scraper.py      navegação COMC via Playwright (sempre HEADFUL — o código força; warm-up limpa o CF e o cf_clearance é reusado do perfil)
   firecrawl_client.py  fetch via Firecrawl (o fetch-mode DEFAULT; fura o Cloudflare na nuvem)
   segments.py          eras (recent/middle/vintage) + ChunkCursor (checkpoint retomável por era)
   comc_set_slugs.json  slugs de set validados na COMC (28 sets: WotC clássicos + era SV)
