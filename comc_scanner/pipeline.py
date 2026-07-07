@@ -1,10 +1,13 @@
 """Scan orchestration: era selection, chunked/resumable scanning, hourly flush."""
 from __future__ import annotations
 
+import datetime
+import json
 import logging
 import re
 import signal
 import time
+from pathlib import Path
 
 from .config import CACHE_DIR, Settings
 from .comc_scraper import ComcAccessError, ComcScraper, listings_from_json, parse_html_file
@@ -228,10 +231,11 @@ class Scanner:
         groups = self.client.groups()
         all_sets = select_sets(groups, self.settings, era)
         snapshot = self.client.snapshot_date()
-        cursor = ChunkCursor.load(era, snapshot) if resume else ChunkCursor(era, snapshot)
-        if not resume:
-            cursor.clear()
+        if resume:
+            cursor = ChunkCursor.load(era, snapshot)
+        else:
             cursor = ChunkCursor(era, snapshot)
+            cursor.clear()  # drop any stale on-disk cursor from a previous run
         start = cursor.next_set_index
         if start >= len(all_sets):
             log.info("Era '%s' complete for %s; restarting sweep.", era, snapshot)
@@ -409,7 +413,6 @@ class Scanner:
         return CACHE_DIR / "comc_set_catalog.json"
 
     def _load_catalog(self) -> dict:
-        import json
         p = self._catalog_path()
         if p.exists():
             try:
@@ -419,7 +422,6 @@ class Scanner:
         return {}
 
     def _save_catalog(self, catalog: dict) -> None:
-        import json
         p = self._catalog_path()
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(catalog, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -456,7 +458,6 @@ class Scanner:
     @staticmethod
     def _harvest_slug(listing, catalog: dict) -> None:
         """Record the COMC (year, slug) for a listing's set, keyed by set_hint."""
-        import re
         if not listing.set_hint or not listing.url:
             return
         m = re.search(r"/Cards/Pokemon/(\d{4})/([^/]+)/", listing.url)
@@ -596,8 +597,6 @@ class Scanner:
         return best
 
     def _load_slug_catalog(self) -> dict:
-        import json
-        from pathlib import Path
         p = Path(__file__).resolve().parent / "comc_set_slugs.json"
         if p.exists():
             try:
@@ -612,10 +611,6 @@ class Scanner:
         `comc_set_slugs.json` in place. Returns {set_name: page-1 listing count}
         (-1 = Cloudflare block, 0 = empty page / bad slug, left unvalidated).
         """
-        import datetime
-        import json
-        from pathlib import Path
-
         path = Path(__file__).resolve().parent / "comc_set_slugs.json"
         slugs = self._load_slug_catalog()
         pending = [

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
 
 # Pokemon category on TCGplayer / TCGCSV (verified).
@@ -21,13 +20,6 @@ RESULTS_DIR = PROJECT_ROOT / "results"
 PROGRESS_DIR = CACHE_DIR / "progress"
 
 VALID_ERAS = ("recent", "middle", "vintage", "all")
-
-
-class RunMode(str, Enum):
-    RUN = "run"          # continuous incremental loop
-    ONCE = "once"        # single chunk, flush, exit
-    REFRESH_PRICES = "refresh-prices"
-    DRY_RUN = "dry-run"  # match/report against a local listings fixture (no COMC)
 
 
 def _load_dotenv(path: Path) -> None:

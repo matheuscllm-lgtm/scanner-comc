@@ -254,10 +254,6 @@ def _parse_dom_loose(html: str) -> list[ComcListing]:
     return out
 
 
-# Back-compat alias (older callers/tests referenced the stdlib parser by name).
-_parse_dom_stdlib = _parse_dom_loose
-
-
 def parse_page(html: str) -> list[ComcListing]:
     listings = _parse_jsonld(html)
     if listings:
