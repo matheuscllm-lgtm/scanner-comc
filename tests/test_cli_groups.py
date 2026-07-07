@@ -32,6 +32,18 @@ def test_group_must_be_one_of_the_four():
         build_parser().parse_args(["targeted", "--group", "9"])
 
 
+def test_group_rejected_outside_targeted_mode(capsys):
+    """Fora do `targeted` o allowlist casa por substring (segments.py), então
+    "Team Rocket" vazaria pra "EX Team Rocket Returns" etc. — --group é
+    exclusivo do targeted (lá a interseção com o catálogo de slugs é exata)."""
+    for cmd in ("broad", "run", "once"):
+        with pytest.raises(SystemExit) as exc:
+            main([cmd, "--group", "1"])
+        assert exc.value.code == 2  # argparse error, antes de qualquer rede
+    err = capsys.readouterr().err
+    assert "só é suportado no modo targeted" in err
+
+
 def test_group_derives_era_without_explicit_era():
     s = _settings()
     args = build_parser().parse_args(["targeted", "--group", "1"])

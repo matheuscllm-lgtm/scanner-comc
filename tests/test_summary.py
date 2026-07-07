@@ -131,6 +131,32 @@ def test_flags_preserved_validar_and_price_tag():
     assert "validar" in alakazam
 
 
+def test_top_n_cap_warning_when_list_is_full():
+    """O Reporter corta os deals em top_n ANTES de gravar o JSON; lista cheia no
+    teto = pode haver deals cortados silenciosamente. A entrega TEM que avisar
+    (contrato "todas as linhas")."""
+    payload = _payload()
+    payload["top_n"] = 3
+    payload["count"] = 3  # gravou exatamente o teto -> pode ter cortado
+    md = build_markdown(payload)
+    assert "Lista cheia no teto top_n=3" in md
+    assert "--top-n maior" in md
+
+
+def test_no_top_n_warning_below_the_cap():
+    payload = _payload()  # count=3 < top_n=50
+    md = build_markdown(payload)
+    assert "Lista cheia no teto" not in md
+
+
+def test_no_top_n_warning_when_fields_missing():
+    payload = _payload()
+    payload.pop("top_n")
+    payload.pop("count")
+    md = build_markdown(payload)  # não explode nem avisa sem os campos
+    assert "Lista cheia no teto" not in md
+
+
 def test_empty_buckets_render_placeholder_not_broken_table():
     md = build_markdown({"era": "vintage", "generated_utc": "x",
                          "min_gross_margin": 0.30, "deals": [], "low_confidence": []})

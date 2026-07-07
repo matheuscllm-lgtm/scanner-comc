@@ -56,7 +56,7 @@ desafio Cloudflare.)
 
 ```powershell
 $env:PYTHONIOENCODING="utf-8"
-python -m comc_scanner targeted --group <N> --fetch-mode playwright --headful --no-sheets --restart
+python -m comc_scanner targeted --group <N> --top-n 200 --fetch-mode playwright --headful --no-sheets --restart
 ```
 
 - **Headful é OBRIGATÓRIO** — headless não fura o Cloudflare Turnstile
@@ -66,9 +66,18 @@ python -m comc_scanner targeted --group <N> --fetch-mode playwright --headful --
   `python -m comc_scanner warm --fetch-mode playwright --headful` e resolva o
   desafio na janela.
 - `--group <N>` já define o allowlist de sets E a era (SV=recent,
-  WotC=vintage) — não precisa de `--era` nem `--sets`.
+  WotC=vintage) — não precisa de `--era` nem `--sets`. `--group` só existe no
+  modo `targeted` (nos outros modos o filtro é por substring e vazaria pra
+  sets parecidos; use `--sets` lá).
+- `--top-n 200` evita o corte silencioso do teto default (50): o Reporter só
+  grava os top-N deals no JSON. Se mesmo assim a entrega avisar "Lista cheia
+  no teto top_n", re-rode com um valor maior.
 - `--restart` ignora o cursor salvo (scan do grupo completo). Se um run morrer
-  no meio, re-rodar SEM `--restart` retoma do set onde parou.
+  no meio, re-rodar SEM `--restart` retoma do set onde parou — **mas SÓ se for
+  o MESMO grupo da run interrompida**: grupos da mesma era (1 e 2 = `recent`;
+  3 e 4 = `vintage`) compartilham o MESMO cursor (`targeted_<era>_idx.txt`).
+  Trocar de grupo exige `--restart`, senão o scan "retoma" no índice do grupo
+  errado.
 - Threshold `--min-margin` é **FRAÇÃO** (`0.30` = 30%, default) — convenção
   CardTrader/COMC/Selados, oposta ao MYP/Liga (percent inteiro).
 
@@ -80,6 +89,12 @@ grupos 1-2, `vintage` para 3-4). A entrega sai SEMPRE da ferramenta:
 ```powershell
 python comc_summary.py results/comc_deals_<era>_latest.json -o results/comc-grupo<N>-<AAAA-MM-DD>.md --group <N>
 ```
+
+> ⚠️ **Gere o `.md` LOGO APÓS o scan do grupo, antes de rodar outro grupo da
+> mesma era**: grupos 1 e 2 (e 3 e 4) escrevem no MESMO
+> `comc_deals_<era>_latest.json` — rodar o grupo seguinte sobrescreve o
+> resultado do anterior. Scan do grupo → summary do grupo → colar → só então
+> o próximo grupo.
 
 1. Colar o conteúdo do `.md` **VERBATIM** no chat — **PROIBIDO** remontar a
    tabela à mão, renomear/reordenar colunas ou dropar o link `[referência]`.

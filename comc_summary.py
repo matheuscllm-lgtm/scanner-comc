@@ -93,6 +93,20 @@ def _section(title: str, rows: list[dict]) -> list[str]:
     return lines
 
 
+def _top_n_warning(payload: dict) -> str | None:
+    """Disclosure do corte ``top_n``: o Reporter corta a lista de deals em
+    ``top_n`` ANTES de gravar o JSON — se a lista gravada está CHEIA no teto,
+    pode haver mais deals acima do threshold que sumiram silenciosamente.
+    Avisar é obrigatório (contrato "todas as linhas"); fingir lista completa
+    seria a mesma desonestidade do fallback-como-real."""
+    top_n = payload.get("top_n")
+    count = payload.get("count")
+    if isinstance(top_n, int) and isinstance(count, int) and 0 < top_n <= count:
+        return (f"- ⚠️ Lista cheia no teto top_n={top_n} — pode haver mais deals acima "
+                "do threshold que foram cortados; re-rode o scan com --top-n maior.")
+    return None
+
+
 def build_markdown(payload: dict, group: int | None = None) -> str:
     clean, review, n_low = split_buckets(payload)
     all_rows = clean + review
@@ -107,8 +121,11 @@ def build_markdown(payload: dict, group: int | None = None) -> str:
         f"- {price_coverage_line(all_rows)}",
         f"- Limiar de margem bruta: {payload.get('min_gross_margin', '?')} (fração) · "
         "piso US$10 · NM-only · EN-only",
-        "",
     ]
+    warning = _top_n_warning(payload)
+    if warning:
+        header.append(warning)
+    header.append("")
     body = _section(CLEAN_TITLE, clean) + _section(REVIEW_TITLE, review)
     footer = [
         "_Linhas `validar` = confiança de match < "

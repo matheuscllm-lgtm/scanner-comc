@@ -28,7 +28,7 @@ def _add_common(p: argparse.ArgumentParser) -> None:
     sel = p.add_mutually_exclusive_group()
     sel.add_argument("--sets", help="comma-separated set allowlist (names/abbrevs)")
     sel.add_argument("--group", type=int, choices=VALID_GROUP_NUMBERS,
-                     help="canonical scan group 1-4 (see the `list-groups` command); "
+                     help="canonical scan group 1-4 (TARGETED MODE ONLY; see `list-groups`); "
                           "sets the allowlist AND derives the era (SV=recent, WotC=vintage)")
     p.add_argument("--max-pages", type=int, help="max COMC pages per set (0=until empty)")
     p.add_argument("--max-sets-per-chunk", type=int, help="sets to process per run (0=all)")
@@ -59,8 +59,11 @@ def _apply_overrides(settings, args) -> None:
     if args.sets:
         settings.set_allowlist = tuple(s.strip() for s in args.sets.split(",") if s.strip())
     if getattr(args, "group", None):
-        # Group -> verbatim set-name allowlist (same mechanism as --sets; argparse
-        # already guarantees --sets/--group are mutually exclusive).
+        # Group -> set-name allowlist, fed through the same substring/alias
+        # matcher as --sets (segments._matches_allowlist is NOT exact-match: e.g.
+        # "Team Rocket" also contains-matches "EX Team Rocket Returns"). That is
+        # why --group is restricted to `targeted` (enforced in main()), where the
+        # final target list is an EXACT-name intersection with the slug catalog.
         settings.set_allowlist = tuple(group_sets(args.group))
     if args.max_pages is not None:
         settings.max_pages_per_set = args.max_pages
@@ -163,10 +166,16 @@ def _resolve_era(args, settings) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
     if args.command == "list-groups":  # pure catalog print — no settings/network needed
         print(describe_groups())
         return 0
+    if getattr(args, "group", None) and args.command != "targeted":
+        # Outside `targeted` the allowlist is applied by substring/alias matching
+        # only (no exact slug-catalog intersection), so a group name like
+        # "Team Rocket" would leak onto e.g. "EX Team Rocket Returns" (2004).
+        parser.error("--group só é suportado no modo targeted; use --sets nos demais modos")
     setup_logging(logging.INFO)
     settings = load_settings()
     _apply_overrides(settings, args)
