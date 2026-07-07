@@ -1,8 +1,8 @@
 """Margin formulas, isolated so the policy is a one-line switch.
 
-Default is gross margin = (tcg_reference - comc_price) / tcg_reference, matching the
-"margem bruta > 20%" requirement. `markup` and a fee-aware variant are provided for
-when fees/shipping should be modelled later.
+Default is gross margin = (tcg_reference - comc_price) / tcg_reference, gated by the
+canonical `min_gross_margin` threshold (fraction, default 0.30 = 30%). `markup` and a
+fee-aware variant are provided for when fees/shipping should be modelled later.
 """
 from __future__ import annotations
 
