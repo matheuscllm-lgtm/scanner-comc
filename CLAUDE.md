@@ -10,7 +10,7 @@ simples e seja preciso ao mesmo tempo.
 > **Manual completo** (repo privado): https://github.com/matheuscllm-lgtm/scanners-commons — erros comuns, referências de preço, chaves, GitHub Actions e modelo de entrega de TODOS os scanners. Cópia-mestra local: `C:\Users\mathe\scanners-commons\`.
 
 Invariantes que valem para TODOS os scanners:
-- **Margem BRUTA, mínimo 30%** — só `(revenda − compra)/compra`, sem taxa embutida; piso de relevância R$50 (~US$10).
+- **Margem BRUTA, mínimo 30%** — convenção da frota = `(revenda − compra)/compra`, sem taxa embutida; piso de relevância R$50 (~US$10). ⚠️ **Neste scanner o _default do código_ é margem-sobre-venda** `(ref − comc)/ref` (mais estrito; `--margin-mode markup` seleciona a fórmula da frota) — ver "Convenções que não mudam".
 - **Só Near Mint** — condição por match EXATO `== "NM"`, nunca substring (já vazou SP).
 - **Nunca inventar preço** — fonte falhou → marca fallback/erro e segue; jamais fabrica número.
 - **Entrega = tabela markdown no chat** (nunca XLSX por padrão), gerada pela ferramenta do repo, mostrando TODAS as linhas (aprovadas + rejeitadas). Coluna `Carta` = nome + número; coluna `Links` combinada = `[oferta](url) · [TCG/referência](url)`.
@@ -84,8 +84,12 @@ contrário do MYP/Liga.
   scan; **não** crie Task Scheduler / GitHub Actions / agendamento.
 - **NM-only** e **English-only** são invariantes do pipeline (cartas de outra
   condição ou idioma viram falso positivo).
-- **Margem bruta pura**, limiar **30%**, **sem** taxas embutidas (frete/câmbio/IOF o
-  operador calcula por fora). Piso de preço **US$ 10** (≈ regra "carta valiosa ≥ R$50").
+- **Margem sobre a venda por default**: `gross_margin = (ref_TCG − preço_COMC) / ref_TCG`
+  (`comc_scanner/margin.py`), limiar **30%** (fração `0.30`), **sem** taxas embutidas
+  (frete/câmbio/IOF o operador calcula por fora). É **mais estrito** que o markup da
+  frota (`0.30` sobre a venda ≈ **42,8%** de markup). Para a fórmula da frota
+  `(revenda − compra)/compra`, use `--margin-mode markup`. Piso de preço **US$ 10**
+  (≈ regra "carta valiosa ≥ R$50").
 
 ## Testes
 
