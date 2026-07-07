@@ -6,8 +6,11 @@ import logging
 import sys
 
 from .config import VALID_ERAS, load_settings
+from .groups import SCAN_GROUPS, VALID_GROUP_NUMBERS, describe_groups, group_sets
 from .logging_setup import setup_logging
 from .pipeline import Scanner
+
+log = logging.getLogger("comc_scanner.cli")
 
 
 def _add_common(p: argparse.ArgumentParser) -> None:
@@ -21,7 +24,12 @@ def _add_common(p: argparse.ArgumentParser) -> None:
                    help="value-buy mode: keep only chase rarities (drops Common/Uncommon/Rare)")
     p.add_argument("--min-confidence", type=float, help="min match confidence for top list")
     p.add_argument("--margin-mode", choices=["gross", "markup"], help="margin formula")
-    p.add_argument("--sets", help="comma-separated set allowlist (names/abbrevs)")
+    # --sets and --group are two ways to build the same set allowlist — never both.
+    sel = p.add_mutually_exclusive_group()
+    sel.add_argument("--sets", help="comma-separated set allowlist (names/abbrevs)")
+    sel.add_argument("--group", type=int, choices=VALID_GROUP_NUMBERS,
+                     help="canonical scan group 1-4 (TARGETED MODE ONLY; see `list-groups`); "
+                          "sets the allowlist AND derives the era (SV=recent, WotC=vintage)")
     p.add_argument("--max-pages", type=int, help="max COMC pages per set (0=until empty)")
     p.add_argument("--max-sets-per-chunk", type=int, help="sets to process per run (0=all)")
     p.add_argument("--max-run-seconds", type=int, help="time budget per run (0=unlimited)")
@@ -50,6 +58,13 @@ def _apply_overrides(settings, args) -> None:
         settings.margin_mode = args.margin_mode
     if args.sets:
         settings.set_allowlist = tuple(s.strip() for s in args.sets.split(",") if s.strip())
+    if getattr(args, "group", None):
+        # Group -> set-name allowlist, fed through the same substring/alias
+        # matcher as --sets (segments._matches_allowlist is NOT exact-match: e.g.
+        # "Team Rocket" also contains-matches "EX Team Rocket Returns"). That is
+        # why --group is restricted to `targeted` (enforced in main()), where the
+        # final target list is an EXACT-name intersection with the slug catalog.
+        settings.set_allowlist = tuple(group_sets(args.group))
     if args.max_pages is not None:
         settings.max_pages_per_set = args.max_pages
     if args.max_sets_per_chunk is not None:
@@ -121,6 +136,10 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(p_parse)
     p_parse.add_argument("--html", required=True, help="path to a saved COMC page")
 
+    sub.add_parser(
+        "list-groups", help="print the 4 canonical scan groups (sets + era) and exit; no network"
+    )
+
     p_val = sub.add_parser(
         "validate-slugs", help="live-validate pending comc_set_slugs.json entries "
                                "(page-1 scrape each; flips validated flag in place)"
@@ -132,12 +151,35 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _resolve_era(args, settings) -> str:
+    """Effective era for the run. A `--group` implies its era (SV=recent,
+    WotC=vintage); a conflicting explicit `--era` only warns — the group wins."""
+    era = getattr(args, "era", None) or settings.default_era
+    group = getattr(args, "group", None)
+    if group:
+        g_era = SCAN_GROUPS[group].era
+        if getattr(args, "era", None) and args.era != g_era:
+            log.warning("--era %s conflita com --group %d (era efetiva do grupo: %s); "
+                        "o grupo manda.", args.era, group, g_era)
+        era = g_era
+    return era
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.command == "list-groups":  # pure catalog print — no settings/network needed
+        print(describe_groups())
+        return 0
+    if getattr(args, "group", None) and args.command != "targeted":
+        # Outside `targeted` the allowlist is applied by substring/alias matching
+        # only (no exact slug-catalog intersection), so a group name like
+        # "Team Rocket" would leak onto e.g. "EX Team Rocket Returns" (2004).
+        parser.error("--group só é suportado no modo targeted; use --sets nos demais modos")
     setup_logging(logging.INFO)
     settings = load_settings()
     _apply_overrides(settings, args)
-    era = args.era or settings.default_era
+    era = _resolve_era(args, settings)
 
     if args.command == "parse-file":
         Scanner(settings).parse_file(args.html)

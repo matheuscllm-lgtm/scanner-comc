@@ -51,13 +51,20 @@ Quando o operador pedir "resultados", "deals", "panorama" ou similar:
 1. **Entrega = uma tabela markdown colada AQUI no chat.** Nunca mande arquivo
    (`.csv`/`.xlsx`/`.json`) por padrão. O operador lê na conversa. Só gere/envie
    arquivo se ele **pedir explicitamente** ("me manda o CSV").
-2. **A tabela vem do gerador do scanner — NUNCA monte uma tabela à mão.** A função
-   `comc_scanner/reporter.py::render_markdown(deals, era, top_n)` é a fonte única
-   do formato (colunas e ordem em `_TABLE_COLS`; `tests/test_reporter.py` trava o
-   formato). O scanner já a imprime a cada flush. Para regerar de um resultado
-   salvo, carregue `results/comc_deals_<era>_latest.json` e passe os deals por
-   `render_markdown`. Montar à mão arrisca esquecer um link ou a flag e diverge
-   do arquivo gravado.
+2. **A entrega sai da ferramenta `comc_summary.py` — NUNCA monte uma tabela à mão**
+   (espelho do `myp_summary.py` do MYP; substitui a instrução antiga de regenerar
+   via `render_markdown` na mão):
+   ```bash
+   python comc_summary.py results/comc_deals_<era>_latest.json -o results/comc-grupo<N>-<data>.md --group <N>
+   ```
+   Cole o `.md` gerado **VERBATIM**. Ele traz o cabeçalho com contagens + a linha
+   de honestidade "Cobertura de preço market" (market/mid/low) e DUAS seções —
+   🟢 deals confiáveis (confiança ≥0.90 E preço market) e ⚠️ validar manualmente
+   (confiança baixa e/ou preço mid/low, incluindo o balde low-confidence) — todas
+   ordenadas por margem desc. A formatação das linhas tem UMA fonte:
+   `comc_scanner/reporter.py` (`render_rows_table`/`render_row_line`, as mesmas
+   funções do `render_markdown` que o scanner imprime a cada flush). Montar à mão
+   arrisca esquecer um link ou a flag e diverge do arquivo gravado.
 3. **Mostre TODAS as linhas** (ordenadas por margem desc.), não uma amostra curada.
 4. Cada linha traz, automaticamente:
    - `Card` = **nome + número de coleção** da carta (ex.: `Pikachu 173/165`);
@@ -75,17 +82,31 @@ Quando o operador pedir "resultados", "deals", "panorama" ou similar:
 
 ## Como rodar
 
+> 🎯 **Skill `scan-comc`** (`.claude/skills/scan-comc/SKILL.md`): quando o
+> operador pedir pra "rodar o COMC", o agente **pergunta qual dos 4 grupos**
+> rodar (2 grupos SV moderno + 2 grupos WotC vintage — fonte canônica:
+> `comc_scanner/groups.py`), roda um por vez e entrega via `comc_summary.py`.
+
 ```bash
 # preparo (1ª vez):
 pip install -r requirements.txt
 playwright install chromium     # só pro fetch ao vivo via navegador local
 cp .env.example .env            # variáveis opcionais (defaults comentados no arquivo)
 
-# scans típicos — modern (SV) e vintage (WotC); piso $10 + margem 0.30 já são default:
+# listar os 4 grupos canônicos (sem rede):
+python -m comc_scanner list-groups
+
+# rodar POR GRUPO (allowlist + era derivadas do grupo; SV=recent, WotC=vintage);
+# piso $10 + margem 0.30 já são default:
+python -m comc_scanner targeted --group 1 --fetch-mode playwright --headful --no-sheets --restart
+
+# rota antiga por era continua funcionando (backward compat):
 python -m comc_scanner targeted --era recent  --fetch-mode playwright --no-sheets --restart
 python -m comc_scanner targeted --era vintage --fetch-mode playwright --no-sheets --restart
 ```
 
+`--group` e `--sets` são mutuamente exclusivos; `--group` dispensa `--era`
+(se passar um `--era` conflitante, o grupo manda e sai um warning).
 Variações úteis: `--min-margin 0.20` (afrouxa o limiar p/ value-buy),
 `--chase-only` (só raridades de perseguição), `--min-margin 0.0` (captura a
 distribuição inteira pra ler depois). `python -m comc_scanner --help` lista tudo.
@@ -97,7 +118,8 @@ contrário do MYP/Liga — ver a tabela de convenções no bloco da frota acima.
 
 | Subcomando | O que faz |
 |---|---|
-| `targeted` | scan por set, usando os slugs de `comc_set_slugs.json` (o modo do dia a dia) |
+| `targeted` | scan por set (`--sets`) ou por **grupo** (`--group N`), usando os slugs de `comc_set_slugs.json` (o modo do dia a dia) |
+| `list-groups` | lista os 4 grupos canônicos de sets (`comc_scanner/groups.py`) — sem rede |
 | `broad` | varredura ampla da vitrine COMC por páginas (cursor de página próprio) |
 | `run` | loop contínuo incremental (um chunk por vez, sem parar) |
 | `once` | escaneia UM chunk, grava resultado e sai |
@@ -112,7 +134,8 @@ Flags comuns a todos: `--era` (`recent`/`middle`/`vintage`/`all` — corte:
 vintage ≤ 2010, middle ≤ 2019; ajustável via env `ERA_VINTAGE_MAX_YEAR`/
 `ERA_MIDDLE_MAX_YEAR`), `--top-n`, `--interval`, `--min-margin`, `--min-price`,
 `--chase-only`, `--min-confidence`, `--margin-mode gross|markup`, `--sets`
-(allowlist), `--max-pages`, `--max-sets-per-chunk`, `--max-run-seconds`,
+(allowlist), `--group N` (grupo canônico; mutuamente exclusivo com `--sets`,
+dispensa `--era`), `--max-pages`, `--max-sets-per-chunk`, `--max-run-seconds`,
 `--condition` (banda COMC, ex. `EX-NM`), `--include-graded`,
 `--fetch-mode firecrawl|playwright`, `--headful`, `--no-sheets`.
 
@@ -157,8 +180,14 @@ vintage ≤ 2010, middle ≤ 2019; ajustável via env `ERA_VINTAGE_MAX_YEAR`/
   coreano...), mas o preço do tcgcsv é do produto EM INGLÊS — casar JP/KR com
   preço EN geraria falso positivo, então `pipeline.py` descarta listings cujo
   set nomeia outro idioma (desligável só via `COMC_EXCLUDE_VARIANTS=""`).
-- **Margem bruta 30% / piso US$10 / nunca recomendar compra**: idem bloco da
-  frota (não repetido aqui; a fonte canônica é a seção 🛰️ acima).
+- ⚠️ **Margem sobre a venda por DEFAULT** (divergência real vs. a fórmula da
+  frota — preservar): `gross_margin = (ref_TCG − preço_COMC) / ref_TCG`
+  (`comc_scanner/margin.py`), limiar **30%** (fração `0.30`), **sem** taxas
+  embutidas (frete/câmbio/IOF o operador calcula por fora). É **mais estrito**
+  que o markup da frota (`0.30` sobre a venda ≈ **42,8%** de markup). Para a
+  fórmula da frota `(revenda − compra)/compra`, use `--margin-mode markup`.
+  Piso de preço **US$ 10** (≈ regra "carta valiosa ≥ R$50"). **Nunca recomendar
+  compra** — idem bloco da frota.
 - **Chave sanitizada contra BOM**: `config.py::clean_secret` remove BOM (U+FEFF)
   e zero-width (U+200B) da `FIRECRAWL_API_KEY` ao ler — a família de erro nº 1
   da frota já está tratada no código; mantenha esse guard.
@@ -177,7 +206,7 @@ vazam) —, só que o mecanismo é banda + allowlist, não a string literal `"NM
 ## Testes
 
 ```bash
-python -m pytest tests/    # 82 testes — offline, sem rede, sem browser
+python -m pytest tests/    # 110 testes — offline, sem rede, sem browser
 ```
 
 (Contagem verificada em 2026-07-07 via `pytest --collect-only`; se divergir,
@@ -188,8 +217,9 @@ vale o que o comando disser.) `tests/fixtures/` traz páginas COMC reais salvas;
 
 ```
 comc_scanner/
-  __main__.py          CLI: subcomandos (targeted/broad/run/once/warm/...) + flags
+  __main__.py          CLI: subcomandos (targeted/list-groups/broad/run/once/warm/...) + flags
   config.py            Settings + ~30 env vars + clean_secret (anti-BOM) + paths (.cache/, results/)
+  groups.py            os 4 grupos canônicos de sets (2 SV moderno + 2 WotC vintage) — usados por --group
   pipeline.py          orquestra scan → match → filtros (NM/EN) → flush de resultados
   comc_scraper.py      navegação COMC via Playwright (headful warm-up → headless com cf_clearance)
   firecrawl_client.py  fetch via Firecrawl (o fetch-mode DEFAULT; fura o Cloudflare na nuvem)
@@ -201,9 +231,10 @@ comc_scanner/
   matcher.py           casa listing COMC ↔ carta TCG (confiança 0-1; <0.90 = flag validar)
   normalize.py         normalização de nomes/números/sets
   margin.py            cálculo de margem (gross/markup)
-  reporter.py          render_markdown (ENTREGA canônica) + JSON/CSV + push opcional Google Sheets
+  reporter.py          render_markdown + render_rows_table/render_row_line (formatação de linha, fonte única) + JSON/CSV + push opcional Google Sheets
   models.py            dataclasses (listing, deal, ...)
   logging_setup.py     logging
+comc_summary.py        ENTREGA canônica ao operador (XLSX/JSON de scan → markdown por grupo, 2 seções); espelho do myp_summary.py
 tests/                 suíte offline (fixtures reais commitadas)
 results/               saídas de scan (gitignored; só o .gitkeep é versionado)
 ```
