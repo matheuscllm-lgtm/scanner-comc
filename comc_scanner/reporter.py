@@ -82,14 +82,20 @@ def _links_cell(row: dict) -> str:
     `oferta` = listagem na COMC; `referência` = preço de referência no TCGPlayer. Os
     dois links são lidos do deal (nunca inventados); emite só os que existirem e "—"
     se nenhum.
+
+    URLs percent-encodadas (espaço, aspas, parênteses) sem re-encodar %XX
+    existentes: em `[label](url)` o `)` cru fecha o link no primeiro parêntese e
+    o wrap `<url>` não é respeitado por todo renderizador (oferta truncada no
+    remote-control, operador 2026-08-04 — fix cross-scanner).
     """
+    from urllib.parse import quote
     parts = []
     comc_url = "" if row.get("comc_url") is None else str(row.get("comc_url"))
     tcg_url = "" if row.get("tcg_url") is None else str(row.get("tcg_url"))
     if comc_url:
-        parts.append(f"[oferta]({comc_url})")
+        parts.append(f"[oferta]({quote(comc_url, safe='%/?&=:+,*')})")
     if tcg_url:
-        parts.append(f"[referência]({tcg_url})")
+        parts.append(f"[referência]({quote(tcg_url, safe='%/?&=:+,*')})")
     return " · ".join(parts) if parts else "—"
 
 
