@@ -20,3 +20,6 @@ results/*
 
 # Internal session / working notes (kept locally, not published)
 HANDOFF.md
+
+# Run logs (detached runners write here; UTF-16 from PowerShell *>>)
+logs/
