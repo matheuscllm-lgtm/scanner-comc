@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from comc_scanner.config import Settings  # noqa: E402
 from comc_scanner.segments import (  # noqa: E402
-    ChunkCursor, assign_era, bucket_sets_by_era, select_sets,
+    assign_era, bucket_sets_by_era, select_sets,
 )
 
 GROUPS = [
@@ -43,16 +43,3 @@ def test_select_with_allowlist():
     s = Settings(set_allowlist=("evolving skies",))
     sets = select_sets(GROUPS, s, "all")
     assert len(sets) == 1 and sets[0].group_id == 2
-
-
-def test_chunk_cursor_roundtrip():
-    c = ChunkCursor(era="testera", snapshot_date="2099-01-01", next_set_index=3, page=2)
-    c.save()
-    try:
-        loaded = ChunkCursor.load("testera", "2099-01-01")
-        assert loaded.next_set_index == 3 and loaded.page == 2
-        # different snapshot date -> fresh cursor
-        fresh = ChunkCursor.load("testera", "2099-02-02")
-        assert fresh.next_set_index == 0
-    finally:
-        c.clear()

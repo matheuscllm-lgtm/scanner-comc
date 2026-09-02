@@ -11,9 +11,6 @@ playwright>=1.44            # real Chromium to clear COMC's Cloudflare challenge
 # patchright                # OPTIONAL stealth fork of playwright; comc_scraper prefers it
 #                           # when installed (better Cloudflare Turnstile auto-solve)
 
-# --- Optional Google Sheets push (lazy-imported; CSV is written regardless) ---
-gspread>=6.0
-google-auth>=2.29
 
 # Note: httpx, pandas, tabulate, rich, tenacity and python-dotenv are intentionally
 # NOT required — the code uses the stdlib (csv/json/urllib-free requests/difflib) and a

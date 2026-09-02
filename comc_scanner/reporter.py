@@ -1,4 +1,19 @@
-"""Reporting: console markdown table, Sheets-friendly CSV/JSON, optional Sheets push."""
+"""Reporting: console markdown table + JSON/CSV files (fonte ÚNICA do formato de linha).
+
+A tabela canônica de entrega (modelo MYP, cross-scanner) tem UMA fonte: as funções
+`render_rows_table`/`render_row_line` daqui. `comc_summary.py` (a ferramenta de
+entrega) só reparte as linhas em baldes e reusa estas funções — nunca montar
+tabela à mão.
+
+Colunas: # | Desconto% | ROI% | COMC$ | Ref$ | Lucro$ | Pokémon | Carta | Set |
+Tipo | Ref | Conf | Status | Links
+- `Carta` = nome + número de coleção ("Pikachu 173/165");
+- `Tipo` = "Raw NM" ou a nota do slab ("PSA 10", "CGC 10 Pristine");
+- `Ref` = de onde veio o preço de referência: "TCG market|mid|low" (TCGplayer via
+  tcgcsv) ou "PC PSA 10" (PriceCharting por nota; "~" = proxy de nota vizinha);
+- `Status` = OK ou MATCH_REVIEW + motivos (confiança <0.90, preço mid/low, proxy);
+- `Links` = "[oferta](url COMC) · [referência](url onde conferir o preço)".
+"""
 from __future__ import annotations
 
 import csv
@@ -8,99 +23,120 @@ import time
 from pathlib import Path
 
 from .config import Settings
-from .models import Deal
+from .models import STATUS_OK, STATUS_REVIEW, Deal
+from .ranking import sort_rows
 
 log = logging.getLogger("comc_scanner.reporter")
 
 # Confidence at/above which a match is treated as solid; below it the row is
-# tagged "validar" so the operator double-checks the card↔TCGPlayer pairing.
+# MATCH_REVIEW so the operator double-checks the card↔reference pairing.
 TRUST_CONFIDENCE = 0.90
-
-# The TCGCSV reference price uses a fallback chain market -> mid -> low (tracked
-# end-to-end as `price_field`). "market" is a real observed sale price; "mid"/"low"
-# are derived/listing-based and less reliable. A deal whose margin rests on a
-# fallback must look DIFFERENT from a real-market one in the operator's primary
-# surface (same honesty lesson as MYP's "fallback shown as real", #55/#58), so
-# non-"market" rows get an explicit "preço:<campo>" tag added to the Flag column.
-# "market" rows stay clean — only fallback rows are marked.
+# TCGplayer reference chain market -> mid -> low ("market" = real observed sale).
 TRUSTED_PRICE_FIELD = "market"
 
-# Columns shown in the console/markdown table (compact subset of the full row).
-# This is the CANONICAL delivery table for the chat (see README "Entrega dos
-# resultados" / CLAUDE.md). Always render with this function — never hand-build a
-# table. Each row carries: `card_number` (Pokémon name + collector number), the
-# match `confidence`, a `flag` ("validar" when confidence is below
-# TRUST_CONFIDENCE, plus "preço:<campo>" when the reference price is a mid/low
-# fallback rather than a real market sale) so suspect rows are marked instead of
-# hidden, and a single
-# `Links` column ("[oferta](comc_url) · [referência](tcg_url)") — the cross-scanner
-# canonical format shared with MYP (`delivery_links`) and Liga (`_links`).
 _TABLE_COLS = [
     ("rank", "#"),
-    ("margin_pct", "Margin%"),
+    ("margin_pct", "Desconto%"),
+    ("roi_pct", "ROI%"),
     ("comc_price", "COMC$"),
-    ("tcg_reference", "TCG$"),
-    ("profit_abs", "Profit$"),
-    ("card_number", "Card"),
+    ("tcg_reference", "Ref$"),
+    ("profit_abs", "Lucro$"),
+    ("pokemon", "Pokémon"),
+    ("card_number", "Carta"),
     ("set", "Set"),
-    ("condition", "Cond"),
-    ("sub_type", "Sub"),
+    ("listing_type", "Tipo"),
+    ("ref_label", "Ref"),
     ("confidence", "Conf"),
-    ("flag", "Flag"),
+    ("status", "Status"),
     ("links", "Links"),
 ]
-_MAXW = {"card_number": 34, "set": 26, "condition": 10, "sub_type": 16}
+_MAXW = {"card_number": 34, "set": 26, "listing_type": 16, "pokemon": 14}
+
+# Rótulos do funil (spec §13) — usados no log final e no cabeçalho da entrega.
+FUNNEL_LABELS = [
+    ("seen", "Listagens analisadas"),
+    ("skip_graded_in_raw", "Ignoradas: gradada na passada raw"),
+    ("skip_raw_in_slab", "Ignoradas: solta na passada de slabs"),
+    ("skip_grade_unparsed", "Ignoradas: nota do slab não reconhecida"),
+    ("skip_grade_out_of_scope", "Ignoradas: nota fora do escopo"),
+    ("skip_condition", "Ignoradas: condição ≠ NM"),
+    ("skip_language", "Ignoradas: idioma ≠ inglês"),
+    ("skip_price_floor", "Ignoradas: abaixo do piso US$"),
+    ("skip_not_iconic", "Ignoradas: Pokémon fora da lista"),
+    ("match_failed", "Matches rejeitados (carta não identificada)"),
+    ("skip_rarity", "Ignoradas: raridade (chase-only)"),
+    ("slab_no_reference", "Slabs sem referência PriceCharting"),
+    ("below_discount", "Descartadas: desconto abaixo do mínimo"),
+    ("ok", "Oportunidades OK"),
+    ("review", "Revisão manual (MATCH_REVIEW)"),
+    ("low_confidence", "Balde low-confidence"),
+    ("comc_errors", "Erros COMC"),
+]
 
 
-def _flag_for(row: dict) -> str:
-    """Per-row review flag.
+def funnel_lines(counts: dict) -> list[str]:
+    """Linhas 'rótulo: N' do funil (só as com valor > 0, mais 'analisadas')."""
+    out = []
+    for key, label in FUNNEL_LABELS:
+        n = int(counts.get(key, 0) or 0)
+        if n or key == "seen":
+            out.append(f"{label}: {n}")
+    return out
 
-    Two honesty signals, composed:
-    - low-confidence match  -> "validar" (else "ok"), never dropped;
-    - reference price not backed by a real "market" sale (mid/low fallback)
-      -> append "preço:<campo>" so a fallback-backed deal is visually distinct
-      from a real-market one. "market" rows carry no price tag.
-    e.g. "ok · preço:mid", "validar · preço:low".
-    """
+
+def classify_row(row: dict, trust: float = TRUST_CONFIDENCE) -> tuple[str, list[str]]:
+    """(status, motivos) de uma linha. OK só quando: confiança ≥ trust E referência
+    é preço 'market' real (raw) ou coluna exata da nota (slab, sem proxy)."""
+    reasons: list[str] = []
     try:
         conf = float(row.get("confidence") or 0.0)
     except (TypeError, ValueError):
         conf = 0.0
-    flag = "validar" if conf < TRUST_CONFIDENCE else "ok"
+    if conf < trust:
+        reasons.append(f"confiança<{trust:.2f}")
+    source = str(row.get("ref_source") or "tcgplayer")
+    field = "" if row.get("price_field") is None else str(row.get("price_field")).strip()
+    if source == "tcgplayer" and field and field != TRUSTED_PRICE_FIELD:
+        reasons.append(f"preço:{field}")
+    if source == "pricecharting-proxy":
+        reasons.append(f"ref~proxy:{field}")
+    return (STATUS_REVIEW if reasons else STATUS_OK), reasons
 
-    price_field = row.get("price_field")
-    price_field = "" if price_field is None else str(price_field).strip()
-    if price_field and price_field != TRUSTED_PRICE_FIELD:
-        flag = f"{flag} · preço:{price_field}"
-    return flag
+
+def _status_cell(row: dict) -> str:
+    status, reasons = classify_row(row)
+    return " · ".join([status, *reasons])
+
+
+def _ref_label(row: dict) -> str:
+    field = "" if row.get("price_field") is None else str(row.get("price_field")).strip()
+    source = str(row.get("ref_source") or "tcgplayer")
+    if source.startswith("pricecharting"):
+        return f"PC {field}" + ("~" if source.endswith("proxy") else "")
+    return f"TCG {field}".strip()
 
 
 def _links_cell(row: dict) -> str:
-    """Coluna `Links`: "[oferta](comc_url) · [referência](tcg_url)".
+    """Coluna `Links`: "[oferta](comc_url) · [referência](ref_url|tcg_url)".
 
-    Espelha o formato canônico cross-scanner (MYP `delivery_links`, Liga `_links`):
-    `oferta` = listagem na COMC; `referência` = preço de referência no TCGPlayer. Os
-    dois links são lidos do deal (nunca inventados); emite só os que existirem e "—"
-    se nenhum.
-
-    URLs percent-encodadas (espaço, aspas, parênteses) sem re-encodar %XX
-    existentes: em `[label](url)` o `)` cru fecha o link no primeiro parêntese e
-    o wrap `<url>` não é respeitado por todo renderizador (oferta truncada no
-    remote-control, operador 2026-08-04 — fix cross-scanner).
+    `oferta` = listagem na COMC; `referência` = página onde conferir o preço usado
+    (TCGplayer para raw; PriceCharting para slab). Lidos do deal, nunca inventados;
+    "—" se nenhum. URLs percent-encodadas (espaço/parênteses quebram o markdown).
     """
     from urllib.parse import quote
     parts = []
     comc_url = "" if row.get("comc_url") is None else str(row.get("comc_url"))
-    tcg_url = "" if row.get("tcg_url") is None else str(row.get("tcg_url"))
+    ref_url = row.get("ref_url") or row.get("tcg_url")
+    ref_url = "" if ref_url is None else str(ref_url)
     if comc_url:
         parts.append(f"[oferta]({quote(comc_url, safe='%/?&=:+,*')})")
-    if tcg_url:
-        parts.append(f"[referência]({quote(tcg_url, safe='%/?&=:+,*')})")
+    if ref_url:
+        parts.append(f"[referência]({quote(ref_url, safe='%/?&=:+,*')})")
     return " · ".join(parts) if parts else "—"
 
 
 def _cell(key: str, value: object) -> str:
-    if key == "links":  # pre-built markdown links cell — render verbatim
+    if key == "links":
         return "" if value is None else str(value)
     s = "" if value is None else str(value)
     w = _MAXW.get(key)
@@ -110,35 +146,34 @@ def _cell(key: str, value: object) -> str:
 
 
 def table_header_lines() -> list[str]:
-    """Markdown header + separator for the canonical delivery table."""
     header = "| " + " | ".join(label for _, label in _TABLE_COLS) + " |"
     sep = "| " + " | ".join("---" for _ in _TABLE_COLS) + " |"
     return [header, sep]
 
 
 def render_row_line(row: dict, rank: int) -> str:
-    """One canonical table line from a flat deal row (Deal.as_row() dict or the
-    same dict re-read from the Reporter JSON/CSV). Computes flag + Links here so
-    every consumer (live scan table, comc_summary.py) shares ONE format source."""
-    row = dict(row)  # don't mutate the caller's row
+    """One canonical table line from a flat deal row (Deal.as_row() or the same
+    dict re-read from the Reporter JSON/CSV)."""
+    row = dict(row)
     row["rank"] = rank
-    row["flag"] = _flag_for(row)
+    row["status"] = _status_cell(row)
+    row["ref_label"] = _ref_label(row)
     row["links"] = _links_cell(row)
     return "| " + " | ".join(_cell(k, row.get(k, "")) for k, _ in _TABLE_COLS) + " |"
 
 
 def render_rows_table(rows: list[dict]) -> str:
-    """Full canonical table (header + every row, ranked in the given order)."""
     lines = table_header_lines()
     lines.extend(render_row_line(row, rank) for rank, row in enumerate(rows, 1))
     return "\n".join(lines)
 
 
-def render_markdown(deals: list[Deal], era: str, top_n: int) -> str:
-    title = f"### COMC deals — era: {era} — top {min(len(deals), top_n)} (margem desc.)"
+def render_markdown(deals: list[Deal], label: str, top_n: int) -> str:
+    title = f"### COMC deals — {label} — top {min(len(deals), top_n)} (ROI → desconto → lucro)"
     if not deals:
         return title + "\n\n_(nenhum deal acima do limiar ainda)_"
-    return "\n".join([title, "", render_rows_table([d.as_row() for d in deals[:top_n]])])
+    rows = sort_rows([d.as_row() for d in deals])[:top_n]
+    return "\n".join([title, "", render_rows_table(rows)])
 
 
 class Reporter:
@@ -146,7 +181,8 @@ class Reporter:
         self.settings = settings
         self.settings.results_dir.mkdir(parents=True, exist_ok=True)
 
-    def _write_csv(self, rows: list[dict], path: Path) -> None:
+    @staticmethod
+    def _write_csv(rows: list[dict], path: Path) -> None:
         if not rows:
             path.write_text("", encoding="utf-8")
             return
@@ -155,60 +191,38 @@ class Reporter:
             writer.writeheader()
             writer.writerows(rows)
 
-    def _write_json(self, payload: dict, path: Path) -> None:
+    @staticmethod
+    def _write_json(payload: dict, path: Path) -> None:
         path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    def flush(
-        self, deals: list[Deal], era: str, low_confidence: list[Deal] | None = None
-    ) -> str:
-        """Write latest + timestamped CSV/JSON, print the markdown table, push Sheets."""
-        deals = sorted(deals, key=lambda d: d.margin, reverse=True)[: self.settings.top_n]
-        rows = [{"rank": i, **d.as_row()} for i, d in enumerate(deals, 1)]
+    def flush(self, deals: list[Deal], label: str, low_confidence: list[Deal] | None = None,
+              stats: dict | None = None) -> str:
+        """Write latest + timestamped CSV/JSON and print the markdown table."""
+        rows = sort_rows([d.as_row() for d in deals])[: self.settings.top_n]
+        rows = [{"rank": i, **r} for i, r in enumerate(rows, 1)]
         stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
         rdir = self.settings.results_dir
 
-        self._write_csv(rows, rdir / f"comc_deals_{era}_latest.csv")
-        self._write_csv(rows, rdir / f"comc_deals_{era}_{stamp}.csv")
+        self._write_csv(rows, rdir / f"comc_deals_{label}_latest.csv")
+        self._write_csv(rows, rdir / f"comc_deals_{label}_{stamp}.csv")
         payload = {
-            "era": era,
+            "scope": label,
             "generated_utc": stamp,
-            "min_gross_margin": self.settings.min_gross_margin,
+            "min_discount_percent": self.settings.min_discount_percent,
+            "min_comc_price": self.settings.min_comc_price,
+            "graded_allow": sorted(self.settings.graded_allow),
+            "iconic_only": self.settings.iconic_only,
             "top_n": self.settings.top_n,
             "count": len(rows),
+            "funnel": dict(stats or {}),
             "deals": rows,
-            "low_confidence": [d.as_row() for d in (low_confidence or [])],
+            "low_confidence": sort_rows([d.as_row() for d in (low_confidence or [])]),
         }
-        self._write_json(payload, rdir / f"comc_deals_{era}_latest.json")
-        self._write_json(payload, rdir / f"comc_deals_{era}_{stamp}.json")
+        self._write_json(payload, rdir / f"comc_deals_{label}_latest.json")
+        self._write_json(payload, rdir / f"comc_deals_{label}_{stamp}.json")
 
-        table = render_markdown(deals, era, self.settings.top_n)
+        table = render_markdown(deals, label, self.settings.top_n)
         print("\n" + table + "\n")
-        self._maybe_push_to_sheets(rows, era)
+        if stats:
+            print("Funil: " + " · ".join(funnel_lines(stats)) + "\n")
         return table
-
-    def _maybe_push_to_sheets(self, rows: list[dict], era: str) -> None:
-        creds = self.settings.gsheets_credentials_json
-        sheet_id = self.settings.gsheets_id
-        if not creds or not sheet_id:
-            log.info("Google Sheets disabled (no credentials/sheet id); wrote CSV only.")
-            return
-        try:
-            import gspread  # type: ignore
-            from google.oauth2.service_account import Credentials  # type: ignore
-
-            scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-            info = json.loads(Path(creds).read_text()) if Path(creds).exists() else json.loads(creds)
-            gc = gspread.authorize(Credentials.from_service_account_info(info, scopes=scopes))
-            sh = gc.open_by_key(sheet_id)
-            title = f"{self.settings.gsheets_worksheet} ({era})"
-            try:
-                ws = sh.worksheet(title)
-            except Exception:
-                ws = sh.add_worksheet(title=title, rows=max(len(rows) + 5, 50), cols=20)
-            ws.clear()
-            if rows:
-                header = list(rows[0].keys())
-                ws.update([header] + [[r.get(c, "") for c in header] for r in rows])
-            log.info("Pushed %d rows to Google Sheet worksheet %s", len(rows), title)
-        except Exception as exc:  # noqa: BLE001 - never fail the scan on Sheets errors
-            log.warning("Google Sheets push failed (%s); CSV still written.", exc)
