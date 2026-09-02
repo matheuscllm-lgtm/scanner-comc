@@ -127,3 +127,19 @@ def test_cli_output_flag_is_required(tmp_path):
     src.write_text(json.dumps(_payload()), encoding="utf-8")
     with pytest.raises(SystemExit):
         comc_summary.main([str(src)])
+
+
+def test_delivery_uses_the_runs_trust_confidence_not_module_default():
+    """Run com TRUST_CONFIDENCE=0.95: deal com confiança 0.92 é MATCH_REVIEW no scan e
+    TEM que continuar MATCH_REVIEW na entrega (nunca virar OK por recalcular com 0.90)."""
+    payload = _payload()
+    payload["trust_confidence"] = 0.95
+    payload["deals"] = [_row(rank=1, name="Charizard ex", number="199/165", comc=45.0,
+                             ref=100.0, confidence=0.92, pokemon="Charizard", prank=1)]
+    payload["low_confidence"] = []
+    ok, review, _ = split_buckets(payload)
+    assert ok == [] and [r["card"] for r in review] == ["Charizard ex"]
+    md = build_markdown(payload)
+    line = next(ln for ln in md.splitlines() if "Charizard ex" in ln and ln.startswith("|"))
+    assert "MATCH_REVIEW · confiança<0.95" in line
+    assert "confiança de match < 0.95" in md

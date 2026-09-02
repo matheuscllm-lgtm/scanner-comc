@@ -303,15 +303,12 @@ def listings_from_json(path: str | Path) -> list[ComcListing]:
 
 
 class ComcScraper:
-    """Fetches and parses COMC browse pages.
+    """Navegação na COMC com Chrome real (patchright/playwright) SEMPRE headful.
 
-    Two transports, selected by `settings.comc_fetch_mode`:
-      - "firecrawl" (default): headless via Firecrawl's stealth proxy — no local browser,
-        no login, no cookies. Clears the Cloudflare challenge from a stealth egress.
-      - "playwright": a local Chromium (optionally seeded with `COMC_SESSION_COOKIE`).
-        Lazily imported so the package works without a browser installed.
-
-    Either way, `iter_listings`/`capture` hand the rendered HTML to `parse_page`.
+    A COMC fica atrás de um Cloudflare Turnstile que só o navegador com janela
+    resolve (headless nunca fura). O perfil persistente guarda o cookie
+    `cf_clearance` entre runs; `warm()` pré-aquece. `iter_listings`/`capture`
+    entregam o HTML renderizado ao `parse_page` (cartas soltas E slabs).
     """
 
     def __init__(self, settings: Settings):

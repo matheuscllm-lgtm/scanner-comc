@@ -26,7 +26,6 @@ TCGCSV_BASE_URL = "https://tcgcsv.com"
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CACHE_DIR = PROJECT_ROOT / ".cache"
 RESULTS_DIR = PROJECT_ROOT / "results"
-PROGRESS_DIR = CACHE_DIR / "progress"
 
 VALID_ERAS = ("recent", "middle", "vintage", "all")
 

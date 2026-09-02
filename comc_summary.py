@@ -31,24 +31,35 @@ CLEAN_TITLE = "## 🟢 Oportunidades OK (match confiável + preço de referênci
 REVIEW_TITLE = "## ⚠️ MATCH_REVIEW — validar manualmente (confiança baixa, preço mid/low ou proxy)"
 
 
+def _trust(payload: dict) -> float:
+    """Limiar de confiança DO RUN (gravado no JSON pelo Reporter). A entrega usa o
+    mesmo limiar que o scan usou — nunca o default do módulo — para um deal
+    classificado MATCH_REVIEW no scan jamais virar OK na tabela."""
+    try:
+        return float(payload.get("trust_confidence") or TRUST_CONFIDENCE)
+    except (TypeError, ValueError):
+        return TRUST_CONFIDENCE
+
+
 def split_buckets(payload: dict) -> tuple[list[dict], list[dict], int]:
-    """(ok, review, n_low_confidence): OK = status OK pela mesma regra do reporter;
-    todo o resto (MATCH_REVIEW + balde low_confidence) vai para revisão — nunca é
-    dropado. Ambos na ordem do ranking."""
+    """(ok, review, n_low_confidence): OK = status OK pela mesma regra do reporter
+    (com o `trust_confidence` do run); todo o resto (MATCH_REVIEW + balde
+    low_confidence) vai para revisão — nunca é dropado. Ambos na ordem do ranking."""
+    trust = _trust(payload)
     deals = list(payload.get("deals") or [])
     low_conf = list(payload.get("low_confidence") or [])
     ok: list[dict] = []
     review: list[dict] = []
     for row in deals:
-        status, _ = classify_row(row)
+        status, _ = classify_row(row, trust=trust)
         (ok if status == STATUS_OK else review).append(row)
     review.extend(low_conf)
     return sort_rows(ok), sort_rows(review), len(low_conf)
 
 
-def _section(title: str, rows: list[dict]) -> list[str]:
+def _section(title: str, rows: list[dict], trust: float) -> list[str]:
     lines = [title, ""]
-    lines.append(render_rows_table(rows) if rows else "_(nenhuma linha neste balde)_")
+    lines.append(render_rows_table(rows, trust) if rows else "_(nenhuma linha neste balde)_")
     lines.append("")
     return lines
 
@@ -84,9 +95,10 @@ def build_markdown(payload: dict, group: int | None = None) -> str:
     if warning:
         header.append(warning)
     header.append("")
-    body = _section(CLEAN_TITLE, ok) + _section(REVIEW_TITLE, review)
+    trust = _trust(payload)
+    body = _section(CLEAN_TITLE, ok, trust) + _section(REVIEW_TITLE, review, trust)
     footer = [
-        f"_MATCH_REVIEW = confiança de match < {TRUST_CONFIDENCE:.2f}, preço de referência "
+        f"_MATCH_REVIEW = confiança de match < {trust:.2f}, preço de referência "
         "mid/low (fallback, não é venda real) ou nota de slab sem coluna exata no "
         "PriceCharting (proxy) — conferir manualmente antes de qualquer decisão. "
         "Ranking: ROI → desconto % → lucro US$ → popularidade do Pokémon. "

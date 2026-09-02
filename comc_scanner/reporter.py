@@ -103,8 +103,8 @@ def classify_row(row: dict, trust: float = TRUST_CONFIDENCE) -> tuple[str, list[
     return (STATUS_REVIEW if reasons else STATUS_OK), reasons
 
 
-def _status_cell(row: dict) -> str:
-    status, reasons = classify_row(row)
+def _status_cell(row: dict, trust: float = TRUST_CONFIDENCE) -> str:
+    status, reasons = classify_row(row, trust=trust)
     return " · ".join([status, *reasons])
 
 
@@ -151,29 +151,31 @@ def table_header_lines() -> list[str]:
     return [header, sep]
 
 
-def render_row_line(row: dict, rank: int) -> str:
+def render_row_line(row: dict, rank: int, trust: float = TRUST_CONFIDENCE) -> str:
     """One canonical table line from a flat deal row (Deal.as_row() or the same
-    dict re-read from the Reporter JSON/CSV)."""
+    dict re-read from the Reporter JSON/CSV). `trust` = the run's TRUST_CONFIDENCE
+    (gravado no JSON) so the delivery never re-classifies with a different bar."""
     row = dict(row)
     row["rank"] = rank
-    row["status"] = _status_cell(row)
+    row["status"] = _status_cell(row, trust)
     row["ref_label"] = _ref_label(row)
     row["links"] = _links_cell(row)
     return "| " + " | ".join(_cell(k, row.get(k, "")) for k, _ in _TABLE_COLS) + " |"
 
 
-def render_rows_table(rows: list[dict]) -> str:
+def render_rows_table(rows: list[dict], trust: float = TRUST_CONFIDENCE) -> str:
     lines = table_header_lines()
-    lines.extend(render_row_line(row, rank) for rank, row in enumerate(rows, 1))
+    lines.extend(render_row_line(row, rank, trust) for rank, row in enumerate(rows, 1))
     return "\n".join(lines)
 
 
-def render_markdown(deals: list[Deal], label: str, top_n: int) -> str:
+def render_markdown(deals: list[Deal], label: str, top_n: int,
+                    trust: float = TRUST_CONFIDENCE) -> str:
     title = f"### COMC deals — {label} — top {min(len(deals), top_n)} (ROI → desconto → lucro)"
     if not deals:
         return title + "\n\n_(nenhum deal acima do limiar ainda)_"
     rows = sort_rows([d.as_row() for d in deals])[:top_n]
-    return "\n".join([title, "", render_rows_table(rows)])
+    return "\n".join([title, "", render_rows_table(rows, trust)])
 
 
 class Reporter:
@@ -212,6 +214,7 @@ class Reporter:
             "min_comc_price": self.settings.min_comc_price,
             "graded_allow": sorted(self.settings.graded_allow),
             "iconic_only": self.settings.iconic_only,
+            "trust_confidence": self.settings.trust_confidence,
             "top_n": self.settings.top_n,
             "count": len(rows),
             "funnel": dict(stats or {}),
@@ -221,7 +224,8 @@ class Reporter:
         self._write_json(payload, rdir / f"comc_deals_{label}_latest.json")
         self._write_json(payload, rdir / f"comc_deals_{label}_{stamp}.json")
 
-        table = render_markdown(deals, label, self.settings.top_n)
+        table = render_markdown(deals, label, self.settings.top_n,
+                                trust=self.settings.trust_confidence)
         print("\n" + table + "\n")
         if stats:
             print("Funil: " + " · ".join(funnel_lines(stats)) + "\n")

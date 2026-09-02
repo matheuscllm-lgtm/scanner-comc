@@ -7,7 +7,7 @@ que morre no meio).
   A era efetiva de um scan `--group N` é derivada daqui — o operador não precisa
   passar `--era` junto.
 - Os nomes de set são as CHAVES VERBATIM do ``comc_set_slugs.json`` (os mesmos
-  nomes TCGCSV que o modo ``targeted`` resolve). Nunca digitar nome de set "de
+  nomes TCGCSV que o ``scan`` resolve). Nunca digitar nome de set "de
   cabeça" — copie do JSON.
 
 INVARIANTE (travado por ``tests/test_groups.py``): a união dos 4 grupos é
@@ -32,7 +32,7 @@ class GroupDef:
     number: int
     title: str
     description: str
-    era: str  # effective --era for `targeted` ("recent" for SV, "vintage" for WotC)
+    era: str  # effective --era for `scan` ("recent" for SV, "vintage" for WotC)
     sets: tuple[str, ...]  # verbatim comc_set_slugs.json keys (= TCGCSV set names)
 
 
@@ -124,7 +124,7 @@ def validated_catalog_sets(path: Path | None = None) -> set[str]:
 
 def describe_groups() -> str:
     """Human-readable listing of the 4 groups (used by `list-groups`; no network)."""
-    lines = ["Grupos canonicos de scan (use: python -m comc_scanner targeted --group N)", ""]
+    lines = ["Grupos canonicos de scan (use: python -m comc_scanner scan --group N)", ""]
     for g in SCAN_GROUPS.values():
         lines.append(
             f"Grupo {g.number} - {g.title} (era {g.era}, {len(g.sets)} sets)"

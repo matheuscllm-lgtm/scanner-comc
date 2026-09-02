@@ -10,7 +10,7 @@
     },
     "validated_at": "2026-06-08",
     "validation_filter_used": "aUngraded (rCOMC dropped to expose real inventory)",
-    "modern_slug_format": "Modern SV/SWSH sets use a single path segment with the year embedded + set code, e.g. 2023_Pokemon_Scarlet__Violet_-_151_sv2a. Store year='' and the full segment as slug; run_targeted handles year='' as a single segment."
+    "modern_slug_format": "Modern SV/SWSH sets use a single path segment with the year embedded + set code, e.g. 2023_Pokemon_Scarlet__Violet_-_151_sv2a. Store year='' and the full segment as slug; run_scan handles year='' as a single segment."
   },
   "Base Set": {
     "year": "1999",
