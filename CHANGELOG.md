@@ -36,6 +36,10 @@
   breaker após 5 falhas, página de bloqueio nunca cacheada); sanidade coluna×vendas
   (`ref÷vendas`); erro de listagem pulado e contado; flush garantido em `finally`;
   `--group all` tolera grupo quebrado; `funnel_lines` mostra contadores desconhecidos.
+- **Pós-primeiro panorama (operador, 2026-09-02)**: funil conta `dedup_dropped` e rotula
+  OK/MATCH_REVIEW como "antes da dedupe" (funil bate com a tabela); rótulo da condição
+  vira "fora do permitido (moderno NM; WotC NM/EX-NM)"; coluna exata do PriceCharting
+  sem NENHUMA venda recente da mesma nota → `MATCH_REVIEW · sem-vendas-recentes`.
 - Fixtures reais novas: `comc_graded_151_capture.html`, `comc_graded_base_capture.html`,
   `pc_product_charizard_ex_151.html`, `pc_search_charizard_ex_151.html`. 136 testes.
 

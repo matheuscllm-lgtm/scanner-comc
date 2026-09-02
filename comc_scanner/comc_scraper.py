@@ -43,6 +43,9 @@ from .normalize import detect_graded
 log = logging.getLogger("comc_scanner.comc")
 
 COMC_BASE = "https://www.comc.com"
+# Teto duro de páginas por set/passada (100 itens/página → 15k listagens). O maior set
+# validado (151) tem ~650 ungraded = 7 páginas; algo acima disto é loop/categoria errada.
+HARD_MAX_PAGES = 150
 # A normal desktop browser UA. NB: COMC's robots.txt allows "*" but blocks AI-training
 # crawlers (GPTBot, CCBot, ClaudeBot, ...). Never set the UA to one of those tokens.
 BROWSER_UA = (
@@ -480,8 +483,16 @@ class ComcScraper:
         """
         n = 0
         page_no = start_page
+        seen_ids: set[str] = set()
         while True:
             if max_pages and n >= max_pages:
+                break
+            if n >= HARD_MAX_PAGES:
+                # Teto duro: nenhum set validado tem >HARD_MAX_PAGES páginas; passar disso
+                # = a COMC está servindo outra coisa (categoria inteira / loop).
+                log.error("COMC %s: %d páginas sem fim — teto duro atingido; set abortado "
+                          "(slug provavelmente resolve para uma categoria maior).",
+                          era_path or search_term, n)
                 break
             url = build_browse_url(
                 self.settings, search_term=search_term, era_path=era_path, page=page_no,
@@ -498,6 +509,15 @@ class ComcScraper:
                 break
             if not listings:
                 break
+            # Página repetida (a COMC devolve a última página para p > fim, ou o mesmo
+            # conteúdo em loop): nenhum item novo → fim real do set. Caso real 2026-09-02:
+            # Neo Revelation paginou 55k listagens (set de 88) até ser morto.
+            ids = {L.item_id or L.url for L in listings}
+            if ids and not (ids - seen_ids):
+                log.warning("COMC %s: página %d repete itens já vistos — fim do set.",
+                            era_path or search_term, page_no)
+                break
+            seen_ids |= ids
             yield page_no, listings
             n += 1
             page_no += 1

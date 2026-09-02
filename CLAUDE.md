@@ -134,7 +134,7 @@ Configuração por env (`.env.example` lista tudo): `MIN_DISCOUNT_PERCENT`,
 ## Testes
 
 ```bash
-python -m pytest tests/    # 157 testes — offline, sem rede, sem browser
+python -m pytest tests/    # 161 testes — offline, sem rede, sem browser
 ```
 
 `tests/fixtures/` traz páginas REAIS: vitrine ungraded (2026-06-08), duas vitrines
