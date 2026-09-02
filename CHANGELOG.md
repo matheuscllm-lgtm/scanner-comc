@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.3.0 — 2026-09-02 — scanner ÚNICO (raw NM + slabs, Pokémon icônicos, 20%)
+
+### Consolidação (spec do operador `scanner_comc.md`)
+- **Um só subcomando `scan`** (`--group 1-4|all` ou `--sets`). Removidos `targeted`,
+  `run`, `once`, `broad`, `dry-run`, `refresh-prices`, `parse-file`, o transporte
+  Firecrawl (`firecrawl_client.py`, workflow `scan.yml`) e o push Google Sheets.
+- **Sem estado de dias anteriores**: cursores de retomada apagados; snapshot tcgcsv
+  sempre re-baixado; cache PriceCharting por dia. Cada run começa do zero.
+- **Slabs**: 2ª passada por set com `aGraded`; parse de `/Graded/<grader>/<nota>` +
+  título `[CGC 10 Pristine]` (`grading.py`); allowlist PSA 10/9, BGS 10/9.5,
+  TAG 10/9.5, CGC 10 Pristine (`GRADED_ALLOW`). Referência de slab =
+  **PriceCharting por nota** (`pricecharting_client.py`, portado do eBay/CT) —
+  nunca comparado com preço raw; nota sem coluna exata = proxy sinalizado.
+- **Pokémon icônicos**: `comc_scanner/iconic_pokemon.csv` (top-100 do operador,
+  rank + score) + `iconic.py` (match por palavra inteira). `--all-pokemon` desliga.
+- **Desconto mínimo 20%** (`MIN_DISCOUNT_PERCENT`, inteiro; `--min-discount`),
+  fórmula `(ref − COMC)/ref`. Raw só condição **NM exata** (EX-NM deixou de passar).
+- **Ranking** (`ranking.py`): ROI → desconto % → lucro US$ → rank do Pokémon.
+- **Status** `OK` / `MATCH_REVIEW` (confiança <0.90, preço mid/low, proxy) gravado
+  no JSON; `classify_row` é a fonte única (reporter + comc_summary).
+- **Funil** (spec §13) contado por etapa e impresso no fim + cabeçalho da entrega.
+- Tabela: `# | Desconto% | ROI% | COMC$ | Ref$ | Lucro$ | Pokémon | Carta | Set |
+  Tipo | Ref | Conf | Status | Links` (`[oferta] · [referência]`; referência do slab
+  aponta pro PriceCharting).
+- **Ajustes pós-revisão do operador**: condição por era (WotC aceita `EX-NM`);
+  colunas `TAG 10`/`ACE 10` lidas do PriceCharting (TAG 10 = referência exata);
+  BGS/TAG 9.5 = mediana de ≥3 vendas concluídas da mesma certificadora+nota
+  (`PC vendas BGS 9.5 (n=…)`), senão bucket "Grade 9.5" só para triagem
+  (`MATCH_REVIEW`); `--sets` por igualdade exata; `--max-price` (teto antes do
+  PriceCharting) e `--max-english` (corte por listagens inglesas, não brutas).
+- **Revisões adversariais (2 lentes) aplicadas**: "Grade 9" também é bucket genérico
+  (PSA 9 → mediana de vendas, senão triagem); venda comparável exige título com UMA só
+  nota e ≤180 dias; `PcError` separa erro de fonte de "sem venda" (contador próprio,
+  breaker após 5 falhas, página de bloqueio nunca cacheada); sanidade coluna×vendas
+  (`ref÷vendas`); erro de listagem pulado e contado; flush garantido em `finally`;
+  `--group all` tolera grupo quebrado; `funnel_lines` mostra contadores desconhecidos.
+- Fixtures reais novas: `comc_graded_151_capture.html`, `comc_graded_base_capture.html`,
+  `pc_product_charizard_ex_151.html`, `pc_search_charizard_ex_151.html`. 136 testes.
+
 ## 0.2.0 — 2026-06-17
 
 ### Entrega canônica de resultados (tabela no chat com links verificáveis)

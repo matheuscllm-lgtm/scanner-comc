@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Iterator
 
 from .config import CACHE_DIR, Settings
-from .firecrawl_client import ComcBlockedError
+from .grading import parse_grade
 from .models import ComcListing
 from .normalize import detect_graded
 
@@ -53,6 +53,10 @@ BROWSER_UA = (
 
 class ComcAccessError(RuntimeError):
     """Raised when COMC access is disallowed (e.g. by robots.txt)."""
+
+
+class ComcBlockedError(RuntimeError):
+    """Raised when Cloudflare keeps blocking a COMC page after the retries."""
 
 
 def _import_playwright():
@@ -99,7 +103,10 @@ def _extract_number(text: str) -> str | None:
 def build_browse_url(
     settings: Settings, search_term: str | None = None,
     era_path: str | None = None, page: int = 1, items: int = 100,
+    graded: bool = False,
 ) -> str:
+    """Browse URL. `graded=True` = vitrine de SLABS (`aGraded`, sem facet de banda —
+    a nota vem do path de cada listing); `False` = cartas soltas (`aUngraded`)."""
     path = "/Cards/Pokemon"
     if era_path:
         path += "/" + urllib.parse.quote(era_path)
@@ -108,14 +115,14 @@ def build_browse_url(
         segments.append("=" + urllib.parse.quote_plus(search_term))
     segments.append(settings.comc_sort or "sh")  # sort: sh=highest first, sl=lowest
     segments.append("fb")  # Buy-It-Now only
-    segments.append("aGraded" if settings.comc_include_graded else "aUngraded")
+    segments.append("aGraded" if graded else "aUngraded")
     # Seller-repository filter. `rCOMC` (COMC's RCR consignment repo) is ESSENTIALLY EMPTY
     # for vintage WotC ungraded — restricting to it makes the scanner find nothing. Default
     # to no r-filter so all seller repos (rOther/rCOMC_CCG/...) are seen. Set
     # COMC_SELLER_REPO=COMC to opt back in.
     if settings.comc_seller_repo:
         segments.append("r" + settings.comc_seller_repo)
-    if settings.comc_condition_band:
+    if settings.comc_condition_band and not graded:
         segments.append("g" + settings.comc_condition_band)
     segments.append(f"i{items}")
     segments.append(f"p{page}")
@@ -188,6 +195,10 @@ _DETAIL_URL_RE = re.compile(
     re.IGNORECASE,
 )
 _DESC_RE = re.compile(r'<div\s+class="description"\s*>\s*(.*?)\s*</div>', re.DOTALL | re.IGNORECASE)
+# Título do listing: `<h3 class="title"><a ...>Pidgeotto [PSA 9 MINT]</a></h3>` — em slabs o
+# colchete traz empresa + nota + qualificador ("CGC 10 Pristine" vs "CGC 10 Gem Mint").
+_TITLE_RE = re.compile(r'<h3\s+class="title"\s*>.*?<a[^>]*>(.*?)</a>', re.DOTALL | re.IGNORECASE)
+_TITLE_GRADE_RE = re.compile(r"\[([^\]]+)\]\s*$")
 _QTY_RE = re.compile(r'<div\s+class="qty"\s*>\s*(\d+)\s+from', re.IGNORECASE)
 _LISTPRICE_RE = re.compile(r'class="listprice', re.IGNORECASE)
 
@@ -213,7 +224,7 @@ def _parse_dom(html: str) -> list[ComcListing]:
         m = _DETAIL_URL_RE.search(block)
         if not m:
             continue
-        url, _year, set_seg, number_seg, name_seg, item_id, graded_seg, _src, cond_seg = m.groups()
+        url, _year, set_seg, number_seg, name_seg, item_id, graded_seg, src_seg, cond_seg = m.groups()
         if url.startswith("/"):  # relative href (live-browser DOM) -> absolute
             url = COMC_BASE + url
         # Price: the first $-amount in the listprice region (falls back to first in block).
@@ -231,8 +242,17 @@ def _parse_dom(html: str) -> list[ComcListing]:
         )
         listing.item_id = item_id
         # The URL says Ungraded/Graded explicitly; trust it over keyword sniffing.
-        if graded_seg.lower() == "graded" and not listing.graded:
+        if graded_seg.lower() == "graded":
             listing.graded = True
+            # Slab: `/Graded/<grader>/<nota>` no path + `[CGC 10 Pristine]` no título.
+            title_m = _TITLE_RE.search(block)
+            title = _clean(title_m.group(1)) if title_m else ""
+            grade = parse_grade(src_seg, cond_seg, title)
+            if grade is not None:
+                listing.grader = grade.grader
+                listing.grade = grade.key
+            label_m = _TITLE_GRADE_RE.search(title)
+            listing.grade_label = label_m.group(1) if label_m else title
         desc = _DESC_RE.search(block)
         if desc:  # carries set + printing/edition signal (1st Ed / Unlimited / Holo)
             listing.description = _clean(desc.group(1))
@@ -283,21 +303,16 @@ def listings_from_json(path: str | Path) -> list[ComcListing]:
 
 
 class ComcScraper:
-    """Fetches and parses COMC browse pages.
+    """Navegação na COMC com Chrome real (patchright/playwright) SEMPRE headful.
 
-    Two transports, selected by `settings.comc_fetch_mode`:
-      - "firecrawl" (default): headless via Firecrawl's stealth proxy — no local browser,
-        no login, no cookies. Clears the Cloudflare challenge from a stealth egress.
-      - "playwright": a local Chromium (optionally seeded with `COMC_SESSION_COOKIE`).
-        Lazily imported so the package works without a browser installed.
-
-    Either way, `iter_listings`/`capture` hand the rendered HTML to `parse_page`.
+    A COMC fica atrás de um Cloudflare Turnstile que só o navegador com janela
+    resolve (headless nunca fura). O perfil persistente guarda o cookie
+    `cf_clearance` entre runs; `warm()` pré-aquece. `iter_listings`/`capture`
+    entregam o HTML renderizado ao `parse_page` (cartas soltas E slabs).
     """
 
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.mode = (settings.comc_fetch_mode or "firecrawl").lower()
-        self._fetcher = None  # Firecrawl fetcher
         self._pw = None
         self._browser = None
         self._context = None
@@ -311,17 +326,6 @@ class ComcScraper:
             raise ComcAccessError(
                 "COMC robots.txt disallows this user-agent/path; aborting scan."
             )
-
-        if self.mode == "firecrawl":
-            from .firecrawl_client import ComcFirecrawlFetcher
-
-            self._fetcher = ComcFirecrawlFetcher(
-                api_key=self.settings.firecrawl_api_key or None,
-                proxy=self.settings.firecrawl_proxy,
-                wait_ms=self.settings.firecrawl_wait_ms,
-            )
-            log.info("COMC fetch mode: firecrawl (stealth proxy, headless).")
-            return self
 
         # COMC's Cloudflare Turnstile is only auto-solved by a HEADFUL real-Chrome browser;
         # headless never clears it (cf_clearance is bound to the headful fingerprint). So
@@ -364,9 +368,6 @@ class ComcScraper:
         return self
 
     def __exit__(self, *exc) -> None:
-        if self._fetcher is not None:
-            self._fetcher.close()
-            return
         try:
             self._context and self._context.close()  # persistent profile auto-saves
         except Exception:
@@ -406,8 +407,6 @@ class ComcScraper:
         auto-solves it (headful) within tens of seconds on a cold profile; once cf_clearance
         is cached the first read already has the page, so there's no wait.
         """
-        if self._fetcher is not None:
-            return self._fetcher.get_html(url)
         page = self._context.new_page()
         try:
             page.goto(url, wait_until="domcontentloaded", timeout=60000)
@@ -470,7 +469,7 @@ class ComcScraper:
 
     def iter_listings(
         self, search_term: str | None, max_pages: int = 0, start_page: int = 1,
-        era_path: str | None = None,
+        era_path: str | None = None, graded: bool = False,
     ) -> Iterator[tuple[int, list[ComcListing]]]:
         """Yield (page_number, listings) for each COMC page until empty / max_pages.
 
@@ -485,7 +484,8 @@ class ComcScraper:
             if max_pages and n >= max_pages:
                 break
             url = build_browse_url(
-                self.settings, search_term=search_term, era_path=era_path, page=page_no
+                self.settings, search_term=search_term, era_path=era_path, page=page_no,
+                graded=graded,
             )
             try:
                 listings = parse_page(self._fetch_html(url))

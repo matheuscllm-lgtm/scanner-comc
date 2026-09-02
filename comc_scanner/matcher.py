@@ -10,7 +10,7 @@ Tiers (confidence):
 from __future__ import annotations
 
 from .config import Settings
-from .margin import get_margin_fn
+from .margin import gross_margin
 from .models import ComcListing, Deal, TcgCard
 from .normalize import (
     fuzzy_ratio, normalize_name, parse_number, parse_set_total, subtype_hint,
@@ -74,7 +74,7 @@ def _build_deal(
     if ref is None:
         return None
     ref_price, sub_used, field_used = ref
-    margin = get_margin_fn(settings.margin_mode)(ref_price, listing.price)
+    margin = gross_margin(ref_price, listing.price)
     return Deal(
         listing=listing,
         product=card.product,

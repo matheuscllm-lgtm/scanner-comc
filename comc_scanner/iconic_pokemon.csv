@@ -1,0 +1,101 @@
+rank,pokemon,score,sources
+1,Charizard,80.1,"DH#9-12, PotY, Reddit"
+2,Greninja,49,"DH#24-3, PotY, TCGp"
+3,Gengar,45.7,"DH#5-3, PotY, Reddit, TCGp"
+4,Umbreon,41.5,"DH#1-3, PotY, Reddit"
+5,Lucario,36,"DH#47-2, PotY, Reddit"
+6,Pikachu,32,"DH#4-8, PotY"
+7,Dragonite,30.5,"DH#10-3, PotY, Reddit"
+8,Sylveon,28.2,"DH#14-3, PotY"
+9,Rayquaza,28,"DH#3-3, PotY"
+10,Gardevoir,27.6,"DH#62-3, PotY, Reddit"
+11,Tyranitar,21.8,"DH#49-1, PotY, Reddit"
+12,Bulbasaur,21.6,"PotY, Reddit"
+13,Mewtwo,21.2,"DH#19-3, PotY"
+14,Mimikyu,21.1,PotY
+15,Eevee,20.6,"DH#71-2, PotY, Reddit"
+16,Espeon,19.2,"DH#29-3, PotY"
+17,Arcanine,18.9,"PotY, Reddit"
+18,Mew,17.7,"DH#7-2, PotY"
+19,Lugia,17.1,"DH#16-1, PotY"
+20,Victini,16.6,"DH#11-2, PotY"
+21,Garchomp,16.5,"DH#52-1, PotY"
+22,Blaziken,16.5,"PotY, Reddit"
+23,Flygon,15.8,"PotY, Reddit"
+24,Glaceon,15.5,"DH#35-3, PotY"
+25,Giratina,15.5,"DH#8-2, PotY"
+26,Typhlosion,14.7,"PotY, Reddit"
+27,Zekrom,14.6,"DH#12-2, PotY"
+28,Ampharos,14,"PotY, Reddit"
+29,Absol,13.3,"PotY, Reddit"
+30,Infernape,13.1,"PotY, Reddit"
+31,Reshiram,12.4,"DH#17-2, PotY"
+32,Dragapult,12.4,PotY
+33,Toxtricity,11.7,PotY
+34,Rowlet,11.2,PotY
+35,Aegislash,11,PotY
+36,Chandelure,10.9,PotY
+37,Snorlax,10.8,"DH#41-2, Reddit"
+38,Darkrai,10.5,"DH#63-2, PotY"
+39,Zoroark,10.4,"DH#86-1, PotY"
+40,Luxray,9.8,PotY
+41,Decidueye,9.4,PotY
+42,Lycanroc,9.1,PotY
+43,Corviknight,8.9,PotY
+44,Hydreigon,8.5,PotY
+45,Charmander,8.5,"DH#50-1, TCGp"
+46,Sceptile,8.3,PotY
+47,Arceus,8.2,"DH#57-1, PotY"
+48,Snom,8.1,PotY
+49,Mudkip,7.9,PotY
+50,Metagross,7.6,PotY
+51,Scizor,7.4,PotY
+52,Piplup,7.4,PotY
+53,Squirtle,7.1,Reddit
+54,Ninetales,6.4,Reddit
+55,Jirachi,6.3,PotY
+56,Milotic,6.2,"DH#98-1, PotY"
+57,Cyndaquil,6,PotY
+58,Torterra,5.8,Reddit
+59,Suicune,5.6,PotY
+60,Magikarp,5.3,DH#23-1
+61,Volcarona,5.2,PotY
+62,Meowth,5.1,"DH#99-1, TCGp"
+63,Slowpoke,5,TCGp
+64,Psyduck,5,TCGp
+65,Lapras,5,PotY
+66,Dunsparce,5,TCGp
+67,Cramorant,5,DH#28-1
+68,Cinccino,5,TCGp
+69,Haxorus,4.9,PotY
+70,Totodile,4.8,PotY
+71,Serperior,4.8,PotY
+72,Leafeon,4.8,DH#30-1
+73,Oshawott,4.7,PotY
+74,Empoleon,4.6,PotY
+75,Vaporeon,4.3,DH#38-1
+76,Moltres,3.3,DH#53-1
+77,Seismitoad,3.1,DH#55-1
+78,Aerodactyl,3.1,DH#56-1
+79,Flareon,2.9,DH#59-1
+80,Jolteon,2.4,DH#66-1
+81,Latias,2.2,DH#69-1
+82,Alakazam,1.8,DH#75-1
+83,Roaring Moon,1.6,DH#78-1
+84,Venusaur,1.2,DH#84-1
+85,Clefairy,1.2,DH#83-1
+86,Ho-Oh,1.1,DH#85-1
+87,Blastoise,1,DH#87-1
+88,Zygarde,0.7,DH#91-1
+89,Feraligatr,0.7,DH#90-1
+90,Starmie,0.3,DH#96-1
+91,Dialga,0.3,DH#97-1
+92,Groudon,0.1,DH#100-1
+93,Gyarados,0,complemento editorial
+94,Machamp,0,complemento editorial
+95,Kyogre,0,complemento editorial
+96,Latios,0,complemento editorial
+97,Celebi,0,complemento editorial
+98,Entei,0,complemento editorial
+99,Raikou,0,complemento editorial
+100,Salamence,0,complemento editorial

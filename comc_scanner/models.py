@@ -3,6 +3,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .ranking import UNRANKED, compute_metrics
+
+STATUS_OK = "OK"
+STATUS_REVIEW = "MATCH_REVIEW"
+
 
 @dataclass(slots=True)
 class TcgProduct:
@@ -45,7 +50,9 @@ class ComcListing:
     number_hint: str | None = None
     condition: str = ""
     graded: bool = False
-    grader: str | None = None
+    grader: str | None = None      # PSA / CGC / BGS / TAG ... (slab)
+    grade: str | None = None       # chave da nota, ex. "PSA 10", "CGC 10 PRISTINE" (slab)
+    grade_label: str = ""          # texto do título da COMC, ex. "PSA 10 GEM MT"
     quantity: int = 1
     seller: str | None = None
     image_url: str | None = None
@@ -58,21 +65,40 @@ class Deal:
     listing: ComcListing
     product: TcgProduct
     price: TcgPrice
-    tcg_reference: float
-    price_field_used: str
+    tcg_reference: float          # preço de referência usado (raw: TCGplayer; slab: PriceCharting)
+    price_field_used: str         # raw: market/mid/low; slab: coluna do PC (ex. "PSA 10")
     sub_type_used: str
-    margin: float
+    margin: float                 # desconto como fração: (ref − comc)/ref
     match_confidence: float
     match_reason: str
     era: str = ""
+    pokemon: str = ""             # Pokémon icônico casado (lista do operador)
+    pokemon_rank: int = UNRANKED
+    ref_source: str = "tcgplayer"  # "tcgplayer" | "pricecharting" | "pricecharting-proxy"
+    ref_url: str = ""             # página onde conferir o preço de referência
+    ref_sales_median: float | None = None  # slab: mediana das vendas da mesma nota (sanidade)
+    ref_n_sales: int = 0          # slab: nº de vendas comparáveis recentes
+    status: str = STATUS_OK       # OK | MATCH_REVIEW (match/preço não confiável o bastante)
+    review_reasons: tuple[str, ...] = ()
+
+    @property
+    def listing_type(self) -> str:
+        """'Raw NM' ou a nota do slab ('PSA 10', 'CGC 10 Pristine')."""
+        if self.listing.graded and self.listing.grade:
+            return self.listing.grade.replace("PRISTINE", "Pristine").replace("GEM", "Gem Mint")
+        return f"Raw {self.listing.condition or ''}".strip()
 
     def as_row(self) -> dict[str, object]:
-        """Flat dict for CSV/JSON/markdown output (Google-Sheets friendly)."""
+        """Flat dict for CSV/JSON/markdown output."""
+        m = compute_metrics(self.tcg_reference, self.listing.price)
         return {
-            "margin_pct": round(self.margin * 100, 2),
+            "margin_pct": m.discount_pct,
+            "roi_pct": m.roi_pct,
             "comc_price": round(self.listing.price, 2),
             "tcg_reference": round(self.tcg_reference, 2),
-            "profit_abs": round(self.tcg_reference - self.listing.price, 2),
+            "profit_abs": m.profit_abs,
+            "pokemon": self.pokemon,
+            "pokemon_rank": self.pokemon_rank,
             "card": self.product.name,
             "number": self.product.number or "",
             # Pokémon name followed by its collector number, e.g. "Pikachu 173/165".
@@ -83,13 +109,20 @@ class Deal:
             ),
             "set": self.product.set_name,
             "rarity": self.product.rarity or "",
+            "listing_type": self.listing_type,
             "condition": self.listing.condition,
             "sub_type": self.sub_type_used,
             "price_field": self.price_field_used,
+            "ref_source": self.ref_source,
+            "ref_sales_median": self.ref_sales_median,
+            "ref_n_sales": self.ref_n_sales,
             "era": self.era,
             "confidence": round(self.match_confidence, 2),
             "match_reason": self.match_reason,
+            "status": self.status,
+            "review_reasons": " · ".join(self.review_reasons),
             "quantity": self.listing.quantity,
             "comc_url": self.listing.url,
             "tcg_url": self.product.url,
+            "ref_url": self.ref_url or self.product.url,
         }

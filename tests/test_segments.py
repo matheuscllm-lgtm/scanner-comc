@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from comc_scanner.config import Settings  # noqa: E402
 from comc_scanner.segments import (  # noqa: E402
-    ChunkCursor, assign_era, bucket_sets_by_era, select_sets,
+    assign_era, bucket_sets_by_era, select_sets,
 )
 
 GROUPS = [
@@ -45,14 +45,14 @@ def test_select_with_allowlist():
     assert len(sets) == 1 and sets[0].group_id == 2
 
 
-def test_chunk_cursor_roundtrip():
-    c = ChunkCursor(era="testera", snapshot_date="2099-01-01", next_set_index=3, page=2)
-    c.save()
-    try:
-        loaded = ChunkCursor.load("testera", "2099-01-01")
-        assert loaded.next_set_index == 3 and loaded.page == 2
-        # different snapshot date -> fresh cursor
-        fresh = ChunkCursor.load("testera", "2099-02-02")
-        assert fresh.next_set_index == 0
-    finally:
-        c.clear()
+def test_allowlist_is_exact_not_substring():
+    groups = [
+        {"groupId": 1, "name": "Base Set", "abbreviation": "BS", "publishedOn": "1999-01-09"},
+        {"groupId": 2, "name": "Base Set 2", "abbreviation": "B2", "publishedOn": "2000-02-24"},
+        {"groupId": 3, "name": "SV01: Scarlet & Violet Base Set", "abbreviation": "SVI", "publishedOn": "2023-03-31"},
+        {"groupId": 4, "name": "EX Team Rocket Returns", "abbreviation": "TRR", "publishedOn": "2004-11-01"},
+        {"groupId": 5, "name": "Team Rocket", "abbreviation": "TR", "publishedOn": "2000-04-24"},
+    ]
+    s = Settings(set_allowlist=("Base Set", "Team Rocket"))
+    assert sorted(x.group_id for x in select_sets(groups, s, "all")) == [1, 5]
+    assert [x.group_id for x in select_sets(groups, Settings(set_allowlist=("B2",)), "all")] == [2]
