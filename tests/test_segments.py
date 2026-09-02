@@ -43,3 +43,16 @@ def test_select_with_allowlist():
     s = Settings(set_allowlist=("evolving skies",))
     sets = select_sets(GROUPS, s, "all")
     assert len(sets) == 1 and sets[0].group_id == 2
+
+
+def test_allowlist_is_exact_not_substring():
+    groups = [
+        {"groupId": 1, "name": "Base Set", "abbreviation": "BS", "publishedOn": "1999-01-09"},
+        {"groupId": 2, "name": "Base Set 2", "abbreviation": "B2", "publishedOn": "2000-02-24"},
+        {"groupId": 3, "name": "SV01: Scarlet & Violet Base Set", "abbreviation": "SVI", "publishedOn": "2023-03-31"},
+        {"groupId": 4, "name": "EX Team Rocket Returns", "abbreviation": "TRR", "publishedOn": "2004-11-01"},
+        {"groupId": 5, "name": "Team Rocket", "abbreviation": "TR", "publishedOn": "2000-04-24"},
+    ]
+    s = Settings(set_allowlist=("Base Set", "Team Rocket"))
+    assert sorted(x.group_id for x in select_sets(groups, s, "all")) == [1, 5]
+    assert [x.group_id for x in select_sets(groups, Settings(set_allowlist=("B2",)), "all")] == [2]

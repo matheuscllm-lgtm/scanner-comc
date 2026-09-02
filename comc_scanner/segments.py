@@ -66,14 +66,11 @@ def bucket_sets_by_era(
 def _matches_allowlist(s: TcgSet, allowlist: tuple[str, ...]) -> bool:
     if not allowlist:
         return True
-    aliases = set_aliases(s.name) | {normalize_set(s.abbreviation)}
-    for entry in allowlist:
-        key = normalize_set(entry)
-        if not key:
-            continue
-        if key in aliases or any(key in a or a in key for a in aliases if a):
-            return True
-    return False
+    """Allowlist por IGUALDADE normalizada (nome, alias ou abreviação) — nunca
+    substring: "Base Set" casa "Base Set", não "Base Set 2" nem "SV01: Scarlet &
+    Violet Base Set" (vazamento real que a busca textual ampla produzia)."""
+    aliases = {a for a in set_aliases(s.name) | {normalize_set(s.abbreviation)} if a}
+    return any(normalize_set(entry) in aliases for entry in allowlist if normalize_set(entry))
 
 
 def select_sets(groups: list[dict], settings: Settings, era: str) -> list[TcgSet]:

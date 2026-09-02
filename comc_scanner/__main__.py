@@ -23,6 +23,10 @@ def _add_scan_args(p: argparse.ArgumentParser) -> None:
                    help="desconto mínimo em %% INTEIRO sobre a referência (default 20)")
     p.add_argument("--min-price", type=float,
                    help="piso do preço COMC em US$ (default 10 = regra R$50; 0 desliga)")
+    p.add_argument("--max-price", type=float,
+                   help="teto de orçamento por carta em US$ (corta antes do PriceCharting); 0=sem teto")
+    p.add_argument("--max-english", type=int,
+                   help="encerra cada set/passada após N listagens INGLESAS válidas (0=todas)")
     p.add_argument("--top-n", type=int, help="máximo de deals gravados/reportados")
     scope = p.add_mutually_exclusive_group()
     scope.add_argument("--raw-only", action="store_true", help="só cartas soltas NM")
@@ -64,6 +68,10 @@ def _apply_overrides(settings, args) -> None:
         settings.min_discount_percent = args.min_discount
     if getattr(args, "min_price", None) is not None:
         settings.min_comc_price = args.min_price
+    if getattr(args, "max_price", None) is not None:
+        settings.max_comc_price = args.max_price
+    if getattr(args, "max_english", None) is not None:
+        settings.max_english_per_set = args.max_english
     if getattr(args, "chase_only", False):
         settings.chase_only = True
     if getattr(args, "min_confidence", None) is not None:

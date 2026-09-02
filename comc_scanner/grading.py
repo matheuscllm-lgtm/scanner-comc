@@ -29,8 +29,10 @@ DEFAULT_GRADED_ALLOW: frozenset[str] = frozenset({
     "CGC 10 PRISTINE",
 })
 
-# Colunas que a página do PriceCharting expõe por nome exato.
-_PC_DIRECT = {"PSA 10", "PSA 9", "BGS 10", "CGC 10 PRISTINE", "SGC 10"}
+# Colunas que a página do PriceCharting expõe por nome exato ("Full Price Guide",
+# verificado 2026-09-02: … Grade 9, Grade 9.5, TAG 10, ACE 10, SGC 10, CGC 10, PSA 10,
+# BGS 10, BGS 10 Black, CGC 10 Pristine).
+_PC_DIRECT = {"PSA 10", "PSA 9", "BGS 10", "CGC 10 PRISTINE", "SGC 10", "TAG 10", "ACE 10"}
 _PC_KEY_FOR_CGC_GEM = "CGC 10"  # rótulo do PC para CGC Gem Mint 10
 
 _VALUE_RE = re.compile(r"^(\d{1,2})(?:[._](\d))?")
@@ -87,9 +89,8 @@ def pc_price_key(grade: Grade) -> tuple[str | None, bool]:
     if key == "CGC 10 GEM":
         return _PC_KEY_FOR_CGC_GEM, False
     if grade.value == 9.5:
-        return "GRADE 9.5", True          # PC agrega BGS/CGC/TAG 9.5 num bucket genérico
-    if grade.grader == "TAG" and grade.value == 10.0:
-        return "PSA 10", True
-    if grade.grader == "TAG" and grade.value == 9.0:
-        return "PSA 9", True
+        # PC agrega BGS/CGC/TAG 9.5 num bucket genérico: serve só para TRIAGEM
+        # (MATCH_REVIEW); a oportunidade real vem da mediana de vendas da mesma
+        # certificadora+nota (pricecharting_client.graded_reference).
+        return "GRADE 9.5", True
     return None, True

@@ -111,9 +111,9 @@ def test_graded_listing_in_raw_pass_is_skipped(index):
 def test_slab_uses_pricecharting_grade_price(index, monkeypatch):
     calls = []
 
-    def fake_ref(name, number, set_label, pc_key, cache_dir=None):
-        calls.append((name, number, set_label, pc_key))
-        return GradedRef(price=125.65, grade_key=pc_key,
+    def fake_ref(name, number, set_label, grade, cache_dir=None):
+        calls.append((name, number, set_label, grade.key))
+        return GradedRef(price=125.65, grade_key=grade.key,
                          url="https://www.pricecharting.com/game/pokemon-scarlet-&-violet-151/charizard-ex-6")
 
     monkeypatch.setattr(pl, "graded_reference", fake_ref)
@@ -130,7 +130,8 @@ def test_slab_uses_pricecharting_grade_price(index, monkeypatch):
 
 def test_slab_out_of_scope_and_proxy_and_no_reference(index, monkeypatch):
     monkeypatch.setattr(pl, "graded_reference",
-                        lambda *a, **k: GradedRef(price=100.0, grade_key=a[3], url="https://pc/x"))
+                        lambda *a, **k: GradedRef(price=100.0, grade_key="GRADE 9.5",
+                                                  url="https://pc/x", method="proxy"))
     sc = pl.Scanner(_settings())
     assert sc.process_listing(_slab("Charizard ex", "006", 50.0, "CGC 10 GEM", "CGC"),
                               index, CTX, pl.KIND_SLAB) is None

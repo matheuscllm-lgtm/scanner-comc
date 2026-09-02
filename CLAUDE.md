@@ -44,10 +44,17 @@ COMC (set-path browse, 2 passadas por set: cartas soltas + slabs)
  → results/comc_deals_<escopo>_latest.json → comc_summary.py (tabela modelo MYP)
 ```
 
-- **Raw** = só condição `NM` exata; **slab** = só notas da allowlist `GRADED_ALLOW`
-  (default PSA 10/9, BGS 10/9.5, TAG 10/9.5, **CGC só 10 Pristine**). Um slab NUNCA é
-  comparado com preço de carta solta. Nota sem coluna exata no PriceCharting (BGS/TAG
-  9.5 → "Grade 9.5"; TAG 10 → PSA 10) é **proxy** e vira `MATCH_REVIEW`.
+- **Raw** = condição por igualdade **por era**: moderno só `NM`; vintage WotC `NM` ou
+  `EX-NM` (a COMC gradua o raw WotC como EX-NM — decisão do operador 2026-09-02).
+- **Slab** = só notas da allowlist `GRADED_ALLOW` (default PSA 10/9, BGS 10/9.5,
+  TAG 10/9.5, **CGC só 10 Pristine**). Um slab NUNCA é comparado com preço de carta
+  solta. Referência do slab, nesta ordem: (1) **coluna exata** da certificadora+nota
+  na página do PriceCharting (PSA 10, BGS 10, **TAG 10**, CGC 10 Pristine…) — pode ser
+  `OK`; (2) sem coluna exata (BGS/TAG 9.5) → **mediana de ≥3 vendas concluídas** da
+  mesma certificadora+nota (tabelas de vendas eBay da própria página; `Ref` =
+  `PC vendas BGS 9.5 (n=…)`) — pode ser `OK`; (3) sem amostra → bucket genérico
+  "Grade 9.5" **só para triagem** (`PC GRADE 9.5~`, sempre `MATCH_REVIEW`, nunca
+  oportunidade de compra); (4) nada → descarta.
 - **Só dados do dia**: sem cursor de retomada; snapshot tcgcsv re-baixado a cada run;
   cache PriceCharting em `.cache/pc/<AAAA-MM-DD>/`. Cada run começa do zero.
 - Roda **grátis**, no PC do operador, via Chrome real **headful** (patchright resolve o
@@ -86,8 +93,11 @@ python -m comc_scanner scan --group all                           # 4 grupos em 
 python -m comc_scanner scan --sets "Base Set,Jungle" --era vintage
 ```
 
-Flags do `scan`: `--group N|all` xor `--sets`; `--era`; `--min-discount 20` (inteiro);
-`--min-price 10`; `--raw-only` / `--slabs-only`; `--all-pokemon`; `--chase-only`;
+Flags do `scan`: `--group N|all` xor `--sets` (igualdade exata do nome do set — nunca
+substring); `--era`; `--min-discount 20` (inteiro); `--min-price 10`; `--max-price`
+(teto de orçamento por carta, corta antes do PriceCharting); `--max-english N`
+(encerra o set após N listagens INGLESAS válidas — japonesas não contam; 0 = todas as
+páginas); `--raw-only` / `--slabs-only`; `--all-pokemon`; `--chase-only`;
 `--min-confidence`; `--max-pages`; `--max-run-seconds`; `--interval`; `--top-n`.
 Outros subcomandos: `list-groups`, `validate-slugs [--revalidate]`, `warm`, `capture`.
 `--headful`/`--restart` são aceitos por compatibilidade e não fazem nada (sempre
@@ -101,7 +111,8 @@ Configuração por env (`.env.example` lista tudo): `MIN_DISCOUNT_PERCENT`,
 
 - **Recorrência é MANUAL** (operador, 2026-06-09): não criar Task Scheduler / cron /
   GitHub Actions de scan. (O workflow `scan.yml` via Firecrawl foi removido na v0.3.)
-- **NM-only** (raw) por igualdade com `COMC_CONDITION_ALLOW` (default só `nm`) e
+- **NM-only** (raw) por igualdade com `COMC_CONDITION_ALLOW` (moderno: `nm`) /
+  `COMC_CONDITION_ALLOW_VINTAGE` (WotC: `nm,ex-nm`) e
   **English-only** (descarta sub-impressões JP/KR/…): casar outra condição/idioma com o
   preço EN NM seria falso positivo.
 - **Desconto sobre a referência**: `(ref − COMC)/ref` (`margin.py`), limiar inteiro
@@ -113,7 +124,7 @@ Configuração por env (`.env.example` lista tudo): `MIN_DISCOUNT_PERCENT`,
 ## Testes
 
 ```bash
-python -m pytest tests/    # 136 testes — offline, sem rede, sem browser
+python -m pytest tests/    # 146 testes — offline, sem rede, sem browser
 ```
 
 `tests/fixtures/` traz páginas REAIS: vitrine ungraded (2026-06-08), duas vitrines

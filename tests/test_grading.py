@@ -52,7 +52,7 @@ def test_allowlist_default_matches_operator_scope():
     ("BGS 10", "BGS 10", False),
     ("BGS 9.5", "GRADE 9.5", True),
     ("CGC 10 PRISTINE", "CGC 10 PRISTINE", False),
-    ("TAG 10", "PSA 10", True),
+    ("TAG 10", "TAG 10", False),
     ("TAG 9.5", "GRADE 9.5", True),
 ])
 def test_pc_price_key(key, pc_key, proxy):

@@ -24,6 +24,12 @@
 - Tabela: `# | Desconto% | ROI% | COMC$ | Ref$ | Lucro$ | Pokémon | Carta | Set |
   Tipo | Ref | Conf | Status | Links` (`[oferta] · [referência]`; referência do slab
   aponta pro PriceCharting).
+- **Ajustes pós-revisão do operador**: condição por era (WotC aceita `EX-NM`);
+  colunas `TAG 10`/`ACE 10` lidas do PriceCharting (TAG 10 = referência exata);
+  BGS/TAG 9.5 = mediana de ≥3 vendas concluídas da mesma certificadora+nota
+  (`PC vendas BGS 9.5 (n=…)`), senão bucket "Grade 9.5" só para triagem
+  (`MATCH_REVIEW`); `--sets` por igualdade exata; `--max-price` (teto antes do
+  PriceCharting) e `--max-english` (corte por listagens inglesas, não brutas).
 - Fixtures reais novas: `comc_graded_151_capture.html`, `comc_graded_base_capture.html`,
   `pc_product_charizard_ex_151.html`, `pc_search_charizard_ex_151.html`. 136 testes.
 

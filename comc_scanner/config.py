@@ -96,9 +96,12 @@ class Settings:
     comc_session_cookie: str = ""
     comc_condition_band: str = "EX-NM"   # facet g<band> (só na passada raw; ignorado no set-path)
     comc_seller_repo: str = ""           # "" = all repos; "COMC" = RCR only (empty for vintage)
-    # NM-only invariant (frota): condição por match EXATO "nm". COMC's g-band facet is
-    # ignored on set-path browse, so we filter by the per-listing condition (from the URL).
+    # Condição aceita por ERA (match EXATO contra a lista; nunca substring). COMC's g-band
+    # facet is ignored on set-path browse, so we filter by the per-listing condition.
+    # Moderno (recent/middle) = só "NM"; vintage WotC = "NM" ou "EX-NM" (a COMC gradua
+    # quase todo raw vintage como EX-NM — decisão do operador 2026-09-02).
     comc_condition_allow: tuple[str, ...] = ("nm",)
+    comc_condition_allow_vintage: tuple[str, ...] = ("nm", "ex-nm")
     # English-only: drop listings whose set string names another language.
     comc_exclude_variants: tuple[str, ...] = (
         "japanese", "korean", "german", "spanish", "french", "italian",
@@ -119,6 +122,8 @@ class Settings:
     # --- Scan behaviour ---
     min_discount_percent: int = MIN_DISCOUNT_PERCENT
     min_comc_price: float = 10.0         # piso US$ (R$50 "carta valiosa"); 0 desliga
+    max_comc_price: float = 0.0          # teto US$ por carta (orçamento); 0 desliga
+    max_english_per_set: int = 0         # para o set após N listagens INGLESAS válidas; 0 = todas
     chase_only: bool = False
     chase_exclude_rarities: tuple[str, ...] = ("common", "uncommon", "rare")
     top_n: int = 200
@@ -156,6 +161,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         comc_condition_band=_get("COMC_CONDITION_BAND", "EX-NM"),
         comc_seller_repo=_get("COMC_SELLER_REPO", ""),
         comc_condition_allow=_csv("COMC_CONDITION_ALLOW", "nm"),
+        comc_condition_allow_vintage=_csv("COMC_CONDITION_ALLOW_VINTAGE", "nm,ex-nm"),
         comc_exclude_variants=_csv(
             "COMC_EXCLUDE_VARIANTS",
             "japanese,korean,german,spanish,french,italian,chinese,portuguese,thai,indonesian",
@@ -172,6 +178,8 @@ def load_settings(env_file: Path | None = None) -> Settings:
         set_allowlist=tuple(s.strip() for s in _get("SET_ALLOWLIST").split(",") if s.strip()),
         min_discount_percent=_get_int("MIN_DISCOUNT_PERCENT", MIN_DISCOUNT_PERCENT),
         min_comc_price=_get_float("MIN_COMC_PRICE", 10.0),
+        max_comc_price=_get_float("MAX_COMC_PRICE", 0.0),
+        max_english_per_set=_get_int("MAX_ENGLISH_PER_SET", 0),
         chase_only=_get_bool("CHASE_ONLY", False),
         chase_exclude_rarities=_csv("CHASE_EXCLUDE_RARITIES", "common,uncommon,rare"),
         top_n=_get_int("TOP_N", 200),

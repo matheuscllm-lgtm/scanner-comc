@@ -24,7 +24,7 @@ from pathlib import Path
 
 from .comc_scraper import ComcAccessError, ComcBlockedError, ComcScraper
 from .config import Settings
-from .grading import Grade, pc_price_key
+from .grading import Grade
 from .iconic import match_iconic
 from .margin import gross_margin
 from .matcher import match
@@ -244,11 +244,14 @@ class Scanner:
         return results
 
     # --- filtros do funil --------------------------------------------------
-    def _condition_ok(self, listing) -> bool:
-        """NM-only (frota): condição da listagem tem que estar EXATAMENTE na allowlist
-        (default só "nm"). Vazia/desconhecida → fora (nunca comparar com o preço NM)."""
+    def _condition_ok(self, listing, era: str = "") -> bool:
+        """Condição por igualdade contra a allowlist DA ERA: moderno só "nm";
+        vintage "nm" ou "ex-nm" (a COMC gradua o raw WotC como EX-NM). Vazia/
+        desconhecida → fora (nunca comparar com o preço NM)."""
         cond = (listing.condition or "").strip().lower()
-        return cond in self.settings.comc_condition_allow
+        allow = (self.settings.comc_condition_allow_vintage if era == "vintage"
+                 else self.settings.comc_condition_allow)
+        return cond in allow
 
     def _variant_ok(self, listing) -> bool:
         """English-only: drop foreign-language sub-printings (Japanese/Korean/...)."""
@@ -258,6 +261,12 @@ class Scanner:
     def _price_ok(self, listing) -> bool:
         floor = self.settings.min_comc_price
         return floor <= 0 or listing.price >= floor
+
+    def _price_ceiling_ok(self, listing) -> bool:
+        """Teto de orçamento por carta (`--max-price`); 0 desliga. Corta ANTES da
+        consulta ao PriceCharting (1 request/carta)."""
+        cap = self.settings.max_comc_price
+        return cap <= 0 or listing.price <= cap
 
     def _chase_ok(self, product) -> bool:
         if not self.settings.chase_only:
@@ -274,22 +283,20 @@ class Scanner:
         grade = _grade_from_key(deal.listing.grade)
         if grade is None:
             return False
-        pc_key, proxy = pc_price_key(grade)
-        if not pc_key:
-            return False
         ref = graded_reference(deal.product.name, deal.product.number, deal.product.set_name,
-                               pc_key, cache_dir=self.settings.pc_cache_dir)
+                               grade, cache_dir=self.settings.pc_cache_dir)
         if ref is None:
             return False
         deal.tcg_reference = ref.price
         deal.price_field_used = ref.grade_key
-        deal.ref_source = "pricecharting-proxy" if proxy else "pricecharting"
+        deal.ref_source = {"column": "pricecharting", "sales": "pricecharting-sales",
+                           "proxy": "pricecharting-proxy"}[ref.method]
         deal.ref_url = ref.url
         deal.margin = gross_margin(ref.price, deal.listing.price)
         return True
 
     def process_listing(self, listing, index: TcgIndex, ctx: str | None, kind: str,
-                        stats: FunnelStats | None = None) -> Deal | None:
+                        stats: FunnelStats | None = None, era: str = "") -> Deal | None:
         """Funil completo de UMA listagem (spec §2-§7). Retorna o Deal aprovado
         (status OK ou MATCH_REVIEW) ou None; cada saída é contada em `stats`."""
         s = self.settings
@@ -299,7 +306,7 @@ class Scanner:
             if listing.graded:
                 st.bump("skip_graded_in_raw")
                 return None
-            if not self._condition_ok(listing):
+            if not self._condition_ok(listing, era):
                 st.bump("skip_condition")
                 return None
         else:
@@ -317,6 +324,9 @@ class Scanner:
             return None
         if not self._price_ok(listing):
             st.bump("skip_price_floor")
+            return None
+        if not self._price_ceiling_ok(listing):
+            st.bump("skip_price_ceiling")
             return None
         hit = match_iconic(listing.raw_name)
         if s.iconic_only and hit is None:
@@ -402,6 +412,7 @@ class Scanner:
                     era_path = f"{year}/{slug}" if year else slug
                     set_yielded = False
                     for kind, graded in passes:
+                        english_seen = 0  # listagens em inglês vistas nesta passada
                         try:
                             for _page, listings in scraper.iter_listings(
                                 search_term=None, era_path=era_path,
@@ -409,10 +420,19 @@ class Scanner:
                             ):
                                 set_yielded = True
                                 for L in listings:
-                                    deal = self.process_listing(L, index, ctx, kind)
+                                    if self._variant_ok(L):
+                                        english_seen += 1
+                                    deal = self.process_listing(L, index, ctx, kind, era=ts.era)
                                     if deal:
                                         deal.era = ts.era
                                         best.add(deal, gate, thr)
+                                # `--max-english`: o corte conta só listagens INGLESAS
+                                # válidas (as japonesas descartadas não contam) — sem a
+                                # flag, varre até a última página.
+                                if s.max_english_per_set and english_seen >= s.max_english_per_set:
+                                    log.info("Set '%s' (%s): %d listagens inglesas — teto "
+                                             "--max-english atingido.", ts.name, kind, english_seen)
+                                    break
                                 if time.time() >= next_flush:
                                     self.reporter.flush(best.qualifying(), label,
                                                         best.low_conf(), stats=self.stats)

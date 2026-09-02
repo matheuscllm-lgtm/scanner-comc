@@ -14,7 +14,7 @@ description: >-
 O catálogo validado (sets `validated: true` de `comc_scanner/comc_set_slugs.json`)
 está dividido em **4 grupos** — fonte canônica `comc_scanner/groups.py`
 (`python -m comc_scanner list-groups` lista sem rede). Cada set é varrido em
-**duas passadas**: cartas soltas (só condição NM) e slabs (só PSA 10/9, BGS 10/9.5,
+**duas passadas**: cartas soltas (moderno só NM; WotC NM ou EX-NM) e slabs (só PSA 10/9, BGS 10/9.5,
 TAG 10/9.5, CGC 10 Pristine). Só cartas de Pokémon da lista
 `comc_scanner/iconic_pokemon.csv` (top-100 do operador) entram; desconto mínimo
 **20%** (`(ref − COMC)/ref`); piso US$10.
@@ -59,9 +59,10 @@ python -m comc_scanner scan --group <N|all>
 - Cada run começa **do zero** e usa **só dados do dia** (snapshot tcgcsv de hoje,
   cache PriceCharting de hoje, sem cursor de retomada). Se um run morrer no meio,
   rode o grupo de novo.
-- Variações: `--min-discount 25` (inteiro), `--raw-only` / `--slabs-only`,
-  `--all-pokemon` (ignora a lista icônica), `--chase-only`, `--max-pages 3`
-  (smoke rápido), `--top-n 400`.
+- Variações: `--min-discount 25` (inteiro), `--max-price 300` (teto por carta),
+  `--max-english 300` (para o set após 300 inglesas válidas), `--raw-only` /
+  `--slabs-only`, `--all-pokemon` (ignora a lista icônica), `--chase-only`,
+  `--max-pages 3` (smoke rápido), `--top-n 400`.
 
 ## Passo 3 — entregar (ritual FIXO, contrato do repo, não negociável)
 
@@ -77,7 +78,8 @@ python comc_summary.py results/comc_deals_grupo<N>_latest.json -o results/comc-g
    DOIS links: `[oferta]` (COMC) · `[referência]` (TCGplayer para raw; PriceCharting
    para slab), lidos do JSON — nunca inventados.
 2. TODOS os baldes aparecem: 🟢 OK e ⚠️ MATCH_REVIEW (confiança <0.90, preço
-   mid/low, ou nota de slab via proxy) — nenhuma linha escondida. Ordem = ranking
+   mid/low, ou slab só com bucket genérico "Grade 9.5" — triagem, sem vendas
+   comparáveis suficientes) — nenhuma linha escondida. Ordem = ranking
    (ROI → desconto % → lucro US$ → popularidade do Pokémon).
 3. O cabeçalho traz o **funil** (analisadas / ignoradas por motivo / OK / revisão)
    — vai junto sempre.

@@ -62,6 +62,7 @@ FUNNEL_LABELS = [
     ("skip_condition", "Ignoradas: condição ≠ NM"),
     ("skip_language", "Ignoradas: idioma ≠ inglês"),
     ("skip_price_floor", "Ignoradas: abaixo do piso US$"),
+    ("skip_price_ceiling", "Ignoradas: acima do teto US$ (--max-price)"),
     ("skip_not_iconic", "Ignoradas: Pokémon fora da lista"),
     ("match_failed", "Matches rejeitados (carta não identificada)"),
     ("skip_rarity", "Ignoradas: raridade (chase-only)"),
@@ -112,7 +113,7 @@ def _ref_label(row: dict) -> str:
     field = "" if row.get("price_field") is None else str(row.get("price_field")).strip()
     source = str(row.get("ref_source") or "tcgplayer")
     if source.startswith("pricecharting"):
-        return f"PC {field}" + ("~" if source.endswith("proxy") else "")
+        return f"PC {field}" + ("~" if source.endswith("proxy") else "")  # "PC vendas BGS 9.5 (n=5)"
     return f"TCG {field}".strip()
 
 

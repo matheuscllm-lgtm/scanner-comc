@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from comc_scanner import pricecharting_client as pc
+from comc_scanner.grading import parse_grade
 
 FIX = Path(__file__).parent / "fixtures"
 PRODUCT = (FIX / "pc_product_charizard_ex_151.html").read_text(encoding="utf-8")
@@ -49,15 +50,21 @@ def test_graded_reference_end_to_end_with_stubbed_fetch(monkeypatch, tmp_path):
         return SEARCH if "search-products" in url else PRODUCT
 
     monkeypatch.setattr(pc, "fetch_page", fake_fetch)
-    ref = pc.graded_reference("Charizard ex", "6", "SV: Scarlet & Violet 151", "PSA 10",
+    psa10 = parse_grade("PSA", "10", "")
+    ref = pc.graded_reference("Charizard ex", "6", "SV: Scarlet & Violet 151", psa10,
                               cache_dir=str(tmp_path))
-    assert ref is not None
+    assert ref is not None and ref.method == "column"
     assert ref.price == 125.65 and ref.grade_key == "PSA 10"
     assert ref.url.endswith("/game/pokemon-scarlet-&-violet-151/charizard-ex-6")
     assert len(calls) == 2
-    # grade sem coluna na página -> None (nunca inventa)
-    assert pc.graded_reference("Charizard ex", "6", "SV: Scarlet & Violet 151", "TAG 10",
-                               cache_dir=str(tmp_path)) is None
+    ref9 = pc.graded_reference("Charizard ex", "6", "SV: Scarlet & Violet 151",
+                               parse_grade("PSA", "9", ""), cache_dir=str(tmp_path))
+    assert ref9 is not None and ref9.method == "column" and ref9.price == 21.95
+    assert ref9.n_sales >= 3 and ref9.sales_median is not None
+    ref95 = pc.graded_reference("Charizard ex", "6", "SV: Scarlet & Violet 151",
+                                parse_grade("BGS", "9_5", ""), cache_dir=str(tmp_path))
+    assert ref95 is not None and ref95.method == "proxy" and ref95.grade_key == "GRADE 9.5"
+    assert ref95.price == 25.0
 
 
 def test_cache_dir_is_scoped_to_today(tmp_path):
