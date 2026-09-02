@@ -19,7 +19,7 @@ cp .env.example .env          # all variables optional; defaults shown in the fi
 ```bash
 python -m comc_scanner list-groups            # the 4 canonical scan groups (no network)
 python -m comc_scanner scan --group 1         # one group: loose NM + slabs, 20% min discount
-python -m comc_scanner scan --group all       # all four groups in sequence
+python -m comc_scanner scan --group all       # all 12 groups in sequence (1999-2023)
 python -m comc_scanner scan --group all --min-price 5 --min-discount 10   # diagnostic run (floor $5, 10%)
 python comc_summary.py results/comc_deals_grupo1_latest.json -o results/comc-grupo1-<date>.md --group 1 --sensitivity 10,15,20
 python -m comc_scanner scan --sets "Base Set" --era vintage --raw-only --min-discount 25

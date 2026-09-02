@@ -15,8 +15,8 @@ log = logging.getLogger("comc_scanner.cli")
 
 def _add_scan_args(p: argparse.ArgumentParser) -> None:
     sel = p.add_mutually_exclusive_group()
-    sel.add_argument("--group", help="grupo canônico 1-4 (ver `list-groups`) ou `all` "
-                                     "(os 4 em sequência); define os sets E a era")
+    sel.add_argument("--group", help="grupo canônico 1-12 (ver `list-groups`) ou `all` "
+                                     "(todos em sequência); define os sets E a era")
     sel.add_argument("--sets", help="allowlist de sets separada por vírgula (nomes/abrevs)")
     p.add_argument("--era", choices=VALID_ERAS, help="era dos sets (default: do env)")
     p.add_argument("--min-discount", type=int,
@@ -45,6 +45,10 @@ def _add_scan_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--restart", action="store_true", help=argparse.SUPPRESS)
 
 
+def _group_range() -> str:
+    return f"{min(VALID_GROUP_NUMBERS)}-{max(VALID_GROUP_NUMBERS)}"
+
+
 def _parse_group(value: str | None) -> list[int] | None:
     if value is None:
         return None
@@ -53,9 +57,11 @@ def _parse_group(value: str | None) -> list[int] | None:
     try:
         n = int(value)
     except ValueError:
-        raise argparse.ArgumentTypeError(f"--group deve ser 1-4 ou 'all' (recebi {value!r})")
+        raise argparse.ArgumentTypeError(
+            f"--group deve ser {_group_range()} ou 'all' (recebi {value!r})")
     if n not in VALID_GROUP_NUMBERS:
-        raise argparse.ArgumentTypeError(f"--group deve ser 1-4 ou 'all' (recebi {value!r})")
+        raise argparse.ArgumentTypeError(
+            f"--group deve ser {_group_range()} ou 'all' (recebi {value!r})")
     return [n]
 
 
@@ -98,7 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_scan = sub.add_parser("scan", help="scanner único: cartas soltas NM + slabs, por grupo/sets")
     _add_scan_args(p_scan)
 
-    sub.add_parser("list-groups", help="lista os 4 grupos canônicos (sets + era); sem rede")
+    sub.add_parser("list-groups", help="lista os grupos canônicos (sets + era); sem rede")
 
     p_val = sub.add_parser("validate-slugs", help="valida ao vivo slugs pendentes do catálogo")
     p_val.add_argument("--revalidate", action="store_true", help="re-testa também os validados")

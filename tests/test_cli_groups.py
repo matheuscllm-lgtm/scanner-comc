@@ -52,5 +52,5 @@ def test_list_groups_prints_groups_and_exits_zero(capsys):
 
 def test_invalid_group_is_an_argparse_error(capsys):
     with pytest.raises(SystemExit) as exc:
-        main(["scan", "--group", "9"])
+        main(["scan", "--group", "99"])
     assert exc.value.code == 2

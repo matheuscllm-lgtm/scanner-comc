@@ -194,8 +194,8 @@ class Scanner:
         log.info("Profile dir: %s", self.settings.comc_profile_dir)
         return ok
 
-    def _load_slug_catalog(self) -> dict:
-        p = Path(__file__).resolve().parent / "comc_set_slugs.json"
+    def _load_slug_catalog(self, path: Path | None = None) -> dict:
+        p = path or (Path(__file__).resolve().parent / "comc_set_slugs.json")
         if p.exists():
             try:
                 return json.loads(p.read_text(encoding="utf-8"))
@@ -204,11 +204,71 @@ class Scanner:
                 return {}
         return {}
 
-    def validate_slugs(self, revalidate: bool = False) -> dict[str, int]:
+    MIN_OWN_SET_SHARE = 0.8  # página 1 tem de ser do PRÓPRIO set (subsets dele contam)
+
+    _KEY_STRONG = frozenset({"pokemon", "the", "and", "tcg"})
+    _KEY_WEAK = frozenset({"base", "set"})      # sufixo/edição genéricos ("… - Base")
+    _KEY_SERIES = ("ex", "xy", "sm", "swsh", "sv")
+    _KEY_ALIAS = (("sm", frozenset({"sun", "moon"})), ("swsh", frozenset({"sword", "shield"})),
+                  ("sv", frozenset({"scarlet", "violet"})))
+
+    @classmethod
+    def _alias(cls, toks: set[str]) -> set[str]:
+        for sigla, extenso in cls._KEY_ALIAS:
+            if sigla in toks:
+                toks = (toks - {sigla}) | set(extenso)  # "SM Base Set" ↔ "Sun  Moon - Base"
+        return toks
+
+    @classmethod
+    def _tokens(cls, text: str, alias: bool = True) -> set[str]:
+        import re as _re
+        import unicodedata
+        t = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode().lower()
+        t = t.replace("&", " ").replace("-", " ").replace(":", " ").replace("_", " ")
+        toks = set(_re.findall(r"[a-z0-9]+", t)) - cls._KEY_STRONG
+        return cls._alias(toks) if alias else toks
+
+    @classmethod
+    def _set_key(cls, text: str) -> tuple[frozenset[str], bool]:
+        """(chave, exata). Chave = tokens distintivos do nome do set. Quando o nome só tem
+        palavras genéricas/de série ("Base Set", "XY Base Set", "SM Base Set") ou só
+        dígitos ("Base Set 2"), a comparação é EXATA (núcleo do hint == chave), senão
+        {base} casaria qualquer slug "…_-_Base" de uma categoria-pai (review PR B)."""
+        import re as _re
+        toks = cls._tokens(text, alias=False)  # decisão sobre as siglas originais
+        series_re = _re.compile(r"(" + "|".join(cls._KEY_SERIES) + r")\d*")
+        distinct = {w for w in toks - cls._KEY_WEAK if not series_re.fullmatch(w)}
+        if distinct and not all(w.isdigit() for w in distinct):
+            return frozenset(cls._alias(distinct)), False
+        return frozenset(cls._alias(toks - cls._KEY_WEAK)), True
+
+    @classmethod
+    def _hint_tokens(cls, text: str) -> set[str]:
+        """Tokens do `set_hint` da listagem (mesma normalização/aliases da chave)."""
+        return cls._tokens(text)
+
+    @classmethod
+    def own_set_share(cls, set_name: str, listings) -> float:
+        """Fração das listagens cujo `set_hint` é do próprio set: chave ⊆ hint (subsets
+        do set — Reverse Foil, idioma — contam; OUTRO set não); nomes genéricos exigem
+        núcleo do hint (sem base/set) IGUAL à chave."""
+        key, exact = cls._set_key(set_name)
+        if not listings:
+            return 0.0
+        if exact:
+            hits = sum(1 for L in listings if (cls._hint_tokens(L.set_hint) - cls._KEY_WEAK) == set(key))
+        else:
+            hits = sum(1 for L in listings if key <= cls._hint_tokens(L.set_hint))
+        return hits / len(listings)
+
+    def validate_slugs(self, revalidate: bool = False,
+                       catalog_path: Path | None = None) -> dict[str, int]:
         """Live-validate catalog slugs still `validated: false` (page-1 scrape each).
-        Returns {set_name: page-1 listing count} (-1 = Cloudflare block, 0 = empty)."""
-        path = Path(__file__).resolve().parent / "comc_set_slugs.json"
-        slugs = self._load_slug_catalog()
+        Returns {set_name: page-1 listing count} (-1 = Cloudflare block, 0 = empty).
+        Só valida se ≥MIN_OWN_SET_SHARE da página 1 for do próprio set: slug errado ou
+        acentuado cai numa categoria-pai da COMC (ano inteiro) e mistura sets."""
+        path = catalog_path or (Path(__file__).resolve().parent / "comc_set_slugs.json")
+        slugs = self._load_slug_catalog(path)
         pending = [
             (name, info) for name, info in slugs.items()
             if not name.startswith("_") and isinstance(info, dict) and info.get("slug")
@@ -226,11 +286,13 @@ class Scanner:
                     year = str(info.get("year", ""))
                     era_path = f"{year}/{info['slug']}" if year else info["slug"]
                     count = 0
+                    page1: list = []
                     try:
                         for _page, listings in scraper.iter_listings(
                             search_term=None, era_path=era_path, max_pages=1,
                         ):
                             count = len(listings)
+                            page1 = list(listings)
                             break
                     except ComcBlockedError:
                         log.warning("Slug '%s' (%s): Cloudflare block; left unvalidated.",
@@ -238,11 +300,21 @@ class Scanner:
                         results[name] = -1
                         continue
                     results[name] = count
-                    if count > 0:
+                    share = round(self.own_set_share(name, page1), 2)
+                    info["page1_own_share"] = share
+                    if count > 0 and share >= self.MIN_OWN_SET_SHARE:
                         info["validated"] = True
                         info["validated_at"] = today
                         info["page1_listings"] = count
-                        log.info("Slug '%s' OK: %d listings on page 1.", name, count)
+                        log.info("Slug '%s' OK: %d listings on page 1 (%.0f%% do próprio set).",
+                                 name, count, share * 100)
+                    elif count > 0:
+                        info["validated"] = False
+                        info.pop("validated_at", None)   # metadados do sucesso antigo saem
+                        info.pop("page1_listings", None)
+                        log.warning("Slug '%s' (%s): %d listagens mas só %.0f%% do próprio set — "
+                                    "categoria-pai da COMC; slug NÃO validado.",
+                                    name, era_path, count, share * 100)
                     else:
                         log.warning("Slug '%s' (%s): 0 listings — slug likely wrong.",
                                     name, era_path)
@@ -250,7 +322,8 @@ class Scanner:
             log.error("COMC access blocked: %s", exc)
         path.write_text(json.dumps(slugs, indent=2, ensure_ascii=False) + "\n",
                         encoding="utf-8")
-        ok = sum(1 for c in results.values() if c > 0)
+        ok = sum(1 for name, c in results.items()
+                 if c > 0 and slugs.get(name, {}).get("validated") is True)
         log.info("Slug validation done: %d/%d confirmed; catalog updated at %s.",
                  ok, len(pending), path)
         return results

@@ -58,8 +58,8 @@ def test_legacy_flags_accepted_and_headful_forced():
 def test_parse_group_values():
     assert _parse_group(None) is None
     assert _parse_group("3") == [3]
-    assert _parse_group("all") == [1, 2, 3, 4]
-    for bad in ("9", "x", "0"):
+    assert _parse_group("all") == list(range(1, 13))
+    for bad in ("99", "x", "0"):
         with pytest.raises(argparse.ArgumentTypeError):
             _parse_group(bad)
 
