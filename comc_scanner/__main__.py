@@ -165,12 +165,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     label = "all" if len(groups) > 1 else f"grupo{groups[0]}"
     best = None
+    failed = 0
     for n in groups:
         settings.set_allowlist = tuple(group_sets(n))
-        best = scanner.run_scan(_resolve_era(args, settings, n), label=label, best=best)
+        try:
+            best = scanner.run_scan(_resolve_era(args, settings, n), label=label, best=best)
+        except Exception:  # noqa: BLE001 — um grupo quebrado não cancela os seguintes
+            failed += 1
+            log.exception("Grupo %d falhou; seguindo para o próximo (JSON parcial já gravado).", n)
         if scanner._stop:
             break
-    return 0
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

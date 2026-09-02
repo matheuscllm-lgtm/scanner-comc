@@ -76,6 +76,8 @@ class Deal:
     pokemon_rank: int = UNRANKED
     ref_source: str = "tcgplayer"  # "tcgplayer" | "pricecharting" | "pricecharting-proxy"
     ref_url: str = ""             # página onde conferir o preço de referência
+    ref_sales_median: float | None = None  # slab: mediana das vendas da mesma nota (sanidade)
+    ref_n_sales: int = 0          # slab: nº de vendas comparáveis recentes
     status: str = STATUS_OK       # OK | MATCH_REVIEW (match/preço não confiável o bastante)
     review_reasons: tuple[str, ...] = ()
 
@@ -112,6 +114,8 @@ class Deal:
             "sub_type": self.sub_type_used,
             "price_field": self.price_field_used,
             "ref_source": self.ref_source,
+            "ref_sales_median": self.ref_sales_median,
+            "ref_n_sales": self.ref_n_sales,
             "era": self.era,
             "confidence": round(self.match_confidence, 2),
             "match_reason": self.match_reason,

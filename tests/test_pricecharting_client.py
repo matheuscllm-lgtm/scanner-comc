@@ -14,7 +14,7 @@ def test_parse_grade_prices_from_real_product_page():
     assert prices["PSA 10"] == 125.65
     assert prices["CGC 10 PRISTINE"] == 55.0
     assert prices["BGS 10"] == 163.0
-    assert prices["PSA 9"] == 21.95
+    assert prices["GRADE 9"] == 21.95  # bucket genérico (todas as certificadoras)
     assert prices["RAW"] == 8.05
 
 
@@ -59,8 +59,9 @@ def test_graded_reference_end_to_end_with_stubbed_fetch(monkeypatch, tmp_path):
     assert len(calls) == 2
     ref9 = pc.graded_reference("Charizard ex", "6", "SV: Scarlet & Violet 151",
                                parse_grade("PSA", "9", ""), cache_dir=str(tmp_path))
-    assert ref9 is not None and ref9.method == "column" and ref9.price == 21.95
-    assert ref9.n_sales >= 3 and ref9.sales_median is not None
+    # "Grade 9" é bucket genérico -> PSA 9 usa a MEDIANA das vendas "PSA 9" recentes da página
+    assert ref9 is not None and ref9.method == "sales" and ref9.n_sales >= 3
+    assert ref9.price == ref9.sales_median and ref9.grade_key.startswith("vendas PSA 9 (n=")
     ref95 = pc.graded_reference("Charizard ex", "6", "SV: Scarlet & Violet 151",
                                 parse_grade("BGS", "9_5", ""), cache_dir=str(tmp_path))
     assert ref95 is not None and ref95.method == "proxy" and ref95.grade_key == "GRADE 9.5"

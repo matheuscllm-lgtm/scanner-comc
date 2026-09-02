@@ -48,7 +48,7 @@ def test_allowlist_default_matches_operator_scope():
 
 @pytest.mark.parametrize("key,pc_key,proxy", [
     ("PSA 10", "PSA 10", False),
-    ("PSA 9", "PSA 9", False),
+    ("PSA 9", "GRADE 9", True),   # bucket genérico do PC: só triagem
     ("BGS 10", "BGS 10", False),
     ("BGS 9.5", "GRADE 9.5", True),
     ("CGC 10 PRISTINE", "CGC 10 PRISTINE", False),

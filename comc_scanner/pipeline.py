@@ -30,7 +30,7 @@ from .margin import gross_margin
 from .matcher import match
 from .models import Deal
 from .normalize import normalize_set, set_aliases
-from .pricecharting_client import graded_reference
+from .pricecharting_client import PcError, graded_reference
 from .ranking import sort_key
 from .reporter import Reporter, classify_row
 from .segments import TcgSet, select_sets
@@ -107,6 +107,8 @@ class Scanner:
         self.reporter = Reporter(settings)
         self.stats = FunnelStats()
         self._stop = False
+        self._pc_errors = 0      # falhas SEGUIDAS do PriceCharting
+        self._pc_down = False    # ≥PC_MAX_CONSECUTIVE_ERRORS → slabs suspensos no run
         try:
             signal.signal(signal.SIGINT, self._on_signal)
             signal.signal(signal.SIGTERM, self._on_signal)
@@ -188,7 +190,8 @@ class Scanner:
         if p.exists():
             try:
                 return json.loads(p.read_text(encoding="utf-8"))
-            except Exception:
+            except (json.JSONDecodeError, OSError) as exc:
+                log.error("Catálogo de slugs CORROMPIDO/ilegível (%s): %s", p, exc)
                 return {}
         return {}
 
@@ -277,23 +280,47 @@ class Scanner:
     def _grade_ok(self, listing) -> bool:
         return bool(listing.grade) and listing.grade in self.settings.graded_allow
 
-    def _slab_reference(self, deal: Deal) -> bool:
-        """Troca a referência do slab pelo preço da NOTA no PriceCharting. False = sem
-        referência confiável (o deal é descartado, nunca comparado com preço raw)."""
+    PC_MAX_CONSECUTIVE_ERRORS = 5
+
+    def _slab_reference(self, deal: Deal) -> str:
+        """Troca a referência do slab pelo preço da NOTA no PriceCharting.
+
+        Retorna "ok" | "no_reference" (carta sem página/coluna/vendas suficientes) |
+        "pc_error" (a FONTE falhou: rede/bloqueio/layout — contado à parte, nunca
+        confundido com "sem venda") | "malformed" (nota ilegível). Só "ok" muta o deal;
+        um slab nunca é comparado com preço raw."""
         grade = _grade_from_key(deal.listing.grade)
         if grade is None:
-            return False
-        ref = graded_reference(deal.product.name, deal.product.number, deal.product.set_name,
-                               grade, cache_dir=self.settings.pc_cache_dir)
+            log.error("Slab com nota ilegível: %r (%s)", deal.listing.grade, deal.listing.url)
+            return "malformed"
+        if self._pc_down:
+            return "pc_error"
+        try:
+            ref = graded_reference(deal.product.name, deal.product.number,
+                                   deal.product.set_name, grade,
+                                   cache_dir=self.settings.pc_cache_dir)
+        except PcError as exc:
+            self._pc_errors += 1
+            log.warning("PriceCharting falhou (%d seguidas) p/ %s [%s]: %s",
+                        self._pc_errors, deal.product.name, grade.key, exc)
+            if self._pc_errors >= self.PC_MAX_CONSECUTIVE_ERRORS:
+                self._pc_down = True
+                log.error("PriceCharting: %d falhas seguidas — passada de slabs suspensa "
+                          "neste run (referências de slab NÃO são confiáveis a partir daqui).",
+                          self._pc_errors)
+            return "pc_error"
+        self._pc_errors = 0
         if ref is None:
-            return False
+            return "no_reference"
         deal.tcg_reference = ref.price
         deal.price_field_used = ref.grade_key
         deal.ref_source = {"column": "pricecharting", "sales": "pricecharting-sales",
                            "proxy": "pricecharting-proxy"}[ref.method]
         deal.ref_url = ref.url
+        deal.ref_sales_median = ref.sales_median
+        deal.ref_n_sales = ref.n_sales
         deal.margin = gross_margin(ref.price, deal.listing.price)
-        return True
+        return "ok"
 
     def process_listing(self, listing, index: TcgIndex, ctx: str | None, kind: str,
                         stats: FunnelStats | None = None, era: str = "") -> Deal | None:
@@ -345,9 +372,12 @@ class Scanner:
             return None
         if hit is not None:
             deal.pokemon, deal.pokemon_rank = hit.name, hit.rank
-        if kind == KIND_SLAB and not self._slab_reference(deal):
-            st.bump("slab_no_reference")
-            return None
+        if kind == KIND_SLAB:
+            outcome = self._slab_reference(deal)
+            if outcome != "ok":
+                st.bump({"no_reference": "slab_no_reference", "pc_error": "slab_pc_error",
+                         "malformed": "slab_grade_malformed"}[outcome])
+                return None
         if deal.margin < s.min_gross_margin:
             st.bump("below_discount")
             return None
@@ -422,29 +452,34 @@ class Scanner:
                                 for L in listings:
                                     if self._variant_ok(L):
                                         english_seen += 1
-                                    deal = self.process_listing(L, index, ctx, kind, era=ts.era)
+                                    try:
+                                        deal = self.process_listing(L, index, ctx, kind, era=ts.era)
+                                    except Exception:  # noqa: BLE001 — 1 listagem não derruba o run
+                                        self.stats.bump("listing_errors")
+                                        log.exception("Listagem falhou e foi pulada: %s", L.url)
+                                        continue
                                     if deal:
                                         deal.era = ts.era
                                         best.add(deal, gate, thr)
-                                # `--max-english`: o corte conta só listagens INGLESAS
-                                # válidas (as japonesas descartadas não contam) — sem a
-                                # flag, varre até a última página.
-                                if s.max_english_per_set and english_seen >= s.max_english_per_set:
-                                    log.info("Set '%s' (%s): %d listagens inglesas — teto "
-                                             "--max-english atingido.", ts.name, kind, english_seen)
-                                    break
                                 if time.time() >= next_flush:
                                     self.reporter.flush(best.qualifying(), label,
                                                         best.low_conf(), stats=self.stats)
                                     next_flush += s.scan_interval_s
+                                # `--max-english`: o corte conta só listagens INGLESAS
+                                # válidas (as japonesas descartadas não contam) — sem a
+                                # flag, varre até a última página.
+                                if s.max_english_per_set and english_seen >= s.max_english_per_set:
+                                    self.stats.bump("sets_capped_max_english")
+                                    log.info("Set '%s' (%s): %d listagens inglesas — teto "
+                                             "--max-english atingido.", ts.name, kind, english_seen)
+                                    break
                                 if self._stop or (deadline and time.monotonic() >= deadline):
                                     log.info("Budget/stop hit at set '%s' (%s).", ts.name, kind)
-                                    self.reporter.flush(best.qualifying(), label,
-                                                        best.low_conf(), stats=self.stats)
                                     return best
                         except ComcBlockedError:
                             if set_yielded:
                                 consecutive_blocked = 0
+                                self.stats.bump("comc_partial_sets")
                                 log.warning("COMC set '%s' (%s) blocked mid-pagination; "
                                             "kept partial.", ts.name, kind)
                             else:
@@ -455,8 +490,6 @@ class Scanner:
                                 if consecutive_blocked >= 3:
                                     log.error("Cloudflare blocked %d sets in a row; aborting.",
                                               consecutive_blocked)
-                                    self.reporter.flush(best.qualifying(), label,
-                                                        best.low_conf(), stats=self.stats)
                                     return best
                     if set_yielded:
                         consecutive_blocked = 0
@@ -466,9 +499,13 @@ class Scanner:
         except ComcAccessError as exc:
             log.error("COMC access blocked: %s", exc)
             self.stats.bump("comc_errors")
-
-        self.reporter.flush(best.qualifying(), label, best.low_conf(), stats=self.stats)
-        log.info("Scan '%s' done; %d deals (%d OK, %d MATCH_REVIEW, %d low-confidence).",
-                 label, len(best.qualifying()), self.stats["ok"], self.stats["review"],
-                 self.stats["low_confidence"])
+        finally:
+            # SEMPRE grava o que foi encontrado (inclusive em erro inesperado): o JSON
+            # `_latest` nunca fica desatualizado em silêncio.
+            self.reporter.flush(best.qualifying(), label, best.low_conf(), stats=self.stats)
+            log.info("Scan '%s': %d deals (%d OK, %d MATCH_REVIEW, %d low-confidence, "
+                     "%d erros de listagem, %d erros PriceCharting).",
+                     label, len(best.qualifying()), self.stats["ok"], self.stats["review"],
+                     self.stats["low_confidence"], self.stats["listing_errors"],
+                     self.stats["slab_pc_error"])
         return best

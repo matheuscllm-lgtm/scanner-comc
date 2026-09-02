@@ -66,22 +66,32 @@ FUNNEL_LABELS = [
     ("skip_not_iconic", "Ignoradas: Pokémon fora da lista"),
     ("match_failed", "Matches rejeitados (carta não identificada)"),
     ("skip_rarity", "Ignoradas: raridade (chase-only)"),
-    ("slab_no_reference", "Slabs sem referência PriceCharting"),
+    ("slab_no_reference", "Slabs sem referência PriceCharting (sem página/coluna/vendas)"),
+    ("slab_pc_error", "Slabs com ERRO na fonte PriceCharting (rede/bloqueio/layout)"),
+    ("slab_grade_malformed", "Slabs com nota ilegível"),
     ("below_discount", "Descartadas: desconto abaixo do mínimo"),
     ("ok", "Oportunidades OK"),
     ("review", "Revisão manual (MATCH_REVIEW)"),
     ("low_confidence", "Balde low-confidence"),
-    ("comc_errors", "Erros COMC"),
+    ("listing_errors", "Listagens com erro interno (puladas)"),
+    ("comc_errors", "Sets bloqueados na COMC"),
+    ("comc_partial_sets", "Sets/passadas truncados (bloqueio no meio)"),
+    ("sets_capped_max_english", "Sets/passadas cortados por --max-english"),
 ]
+_KNOWN_FUNNEL_KEYS = {k for k, _ in FUNNEL_LABELS}
 
 
 def funnel_lines(counts: dict) -> list[str]:
-    """Linhas 'rótulo: N' do funil (só as com valor > 0, mais 'analisadas')."""
+    """Linhas 'rótulo: N' do funil (só as com valor > 0, mais 'analisadas'); contadores
+    sem rótulo conhecido aparecem como 'outros: k=v' (nunca somem da entrega)."""
     out = []
     for key, label in FUNNEL_LABELS:
         n = int(counts.get(key, 0) or 0)
         if n or key == "seen":
             out.append(f"{label}: {n}")
+    extra = {k: v for k, v in counts.items() if k not in _KNOWN_FUNNEL_KEYS and v}
+    if extra:
+        out.append("outros: " + ", ".join(f"{k}={v}" for k, v in sorted(extra.items())))
     return out
 
 
@@ -97,10 +107,23 @@ def classify_row(row: dict, trust: float = TRUST_CONFIDENCE) -> tuple[str, list[
         reasons.append(f"confiança<{trust:.2f}")
     source = str(row.get("ref_source") or "tcgplayer")
     field = "" if row.get("price_field") is None else str(row.get("price_field")).strip()
+    listing_type = str(row.get("listing_type") or "")
+    if source == "tcgplayer" and listing_type and not listing_type.startswith("Raw"):
+        reasons.append("slab×ref-raw")  # slab com referência de carta solta: nunca OK
     if source == "tcgplayer" and field and field != TRUSTED_PRICE_FIELD:
         reasons.append(f"preço:{field}")
     if source == "pricecharting-proxy":
         reasons.append(f"ref~proxy:{field}")
+    if source == "pricecharting":
+        # Sanidade: coluna exata muito longe da mediana das vendas recentes da mesma nota.
+        try:
+            col = float(row.get("tcg_reference") or 0.0)
+            med = row.get("ref_sales_median")
+            n = int(row.get("ref_n_sales") or 0)
+            if med is not None and col > 0 and n >= 3 and abs(col - float(med)) / col > 0.30:
+                reasons.append(f"ref÷vendas(n={n}:{float(med):.2f})")
+        except (TypeError, ValueError):
+            pass
     return (STATUS_REVIEW if reasons else STATUS_OK), reasons
 
 

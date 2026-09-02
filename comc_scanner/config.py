@@ -12,11 +12,14 @@ Parâmetros de negócio (editáveis por env / CLI, nunca hardcoded na lógica):
 """
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .grading import DEFAULT_GRADED_ALLOW
+
+_log = logging.getLogger("comc_scanner.config")
 
 # Pokemon category on TCGplayer / TCGCSV (verified).
 POKEMON_CATEGORY_ID = 3
@@ -66,16 +69,20 @@ def _get(key: str, default: str = "") -> str:
 
 
 def _get_float(key: str, default: float) -> float:
+    raw = os.environ.get(key, "").strip()
     try:
-        return float(os.environ.get(key, "").strip() or default)
+        return float(raw or default)
     except ValueError:
+        _log.warning("env %s=%r inválido; usando default %s", key, raw, default)
         return default
 
 
 def _get_int(key: str, default: int) -> int:
+    raw = os.environ.get(key, "").strip()
     try:
-        return int(float(os.environ.get(key, "").strip() or default))
+        return int(float(raw or default))
     except ValueError:
+        _log.warning("env %s=%r inválido; usando default %s", key, raw, default)
         return default
 
 

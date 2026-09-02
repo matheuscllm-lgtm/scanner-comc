@@ -30,6 +30,12 @@
   (`PC vendas BGS 9.5 (n=…)`), senão bucket "Grade 9.5" só para triagem
   (`MATCH_REVIEW`); `--sets` por igualdade exata; `--max-price` (teto antes do
   PriceCharting) e `--max-english` (corte por listagens inglesas, não brutas).
+- **Revisões adversariais (2 lentes) aplicadas**: "Grade 9" também é bucket genérico
+  (PSA 9 → mediana de vendas, senão triagem); venda comparável exige título com UMA só
+  nota e ≤180 dias; `PcError` separa erro de fonte de "sem venda" (contador próprio,
+  breaker após 5 falhas, página de bloqueio nunca cacheada); sanidade coluna×vendas
+  (`ref÷vendas`); erro de listagem pulado e contado; flush garantido em `finally`;
+  `--group all` tolera grupo quebrado; `funnel_lines` mostra contadores desconhecidos.
 - Fixtures reais novas: `comc_graded_151_capture.html`, `comc_graded_base_capture.html`,
   `pc_product_charizard_ex_151.html`, `pc_search_charizard_ex_151.html`. 136 testes.
 

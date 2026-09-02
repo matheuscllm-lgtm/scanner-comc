@@ -49,12 +49,21 @@ COMC (set-path browse, 2 passadas por set: cartas soltas + slabs)
 - **Slab** = só notas da allowlist `GRADED_ALLOW` (default PSA 10/9, BGS 10/9.5,
   TAG 10/9.5, **CGC só 10 Pristine**). Um slab NUNCA é comparado com preço de carta
   solta. Referência do slab, nesta ordem: (1) **coluna exata** da certificadora+nota
-  na página do PriceCharting (PSA 10, BGS 10, **TAG 10**, CGC 10 Pristine…) — pode ser
-  `OK`; (2) sem coluna exata (BGS/TAG 9.5) → **mediana de ≥3 vendas concluídas** da
-  mesma certificadora+nota (tabelas de vendas eBay da própria página; `Ref` =
-  `PC vendas BGS 9.5 (n=…)`) — pode ser `OK`; (3) sem amostra → bucket genérico
-  "Grade 9.5" **só para triagem** (`PC GRADE 9.5~`, sempre `MATCH_REVIEW`, nunca
-  oportunidade de compra); (4) nada → descarta.
+  na página do PriceCharting (só existe na nota 10: PSA 10, BGS 10, **TAG 10**, ACE 10,
+  SGC 10, CGC 10 Pristine) — pode ser `OK`; a mediana das vendas recentes da mesma nota
+  vai junto como sanidade (coluna >30% longe → `MATCH_REVIEW · ref÷vendas`); (2) sem
+  coluna exata (**qualquer nota 9 ou 9.5** — "Grade 9"/"Grade 9.5" do PC são buckets
+  genéricos que misturam certificadoras) → **mediana de ≥3 vendas concluídas dos
+  últimos 180 dias** da mesma certificadora+nota, cujo título cite SÓ essa nota
+  (tabelas de vendas eBay da própria página; `Ref` = `PC vendas PSA 9 (n=…, mês..mês)`)
+  — pode ser `OK`; (3) sem amostra → bucket genérico **só para triagem** (`PC GRADE
+  9.5~`, sempre `MATCH_REVIEW`, nunca oportunidade de compra); (4) nada → descarta.
+- **Fonte falhou ≠ sem venda**: rede/bloqueio/página sem tabelas no PriceCharting vira
+  `PcError` → contador `Slabs com ERRO na fonte` (nunca "sem referência"); 5 falhas
+  seguidas suspendem a passada de slabs no run; página de bloqueio/vazia NUNCA entra no
+  cache do dia. Erro interno numa listagem é contado (`listing_errors`) e pulado; o JSON
+  `_latest` é gravado SEMPRE (`finally`), e em `--group all` um grupo quebrado não
+  cancela os seguintes.
 - **Só dados do dia**: sem cursor de retomada; snapshot tcgcsv re-baixado a cada run;
   cache PriceCharting em `.cache/pc/<AAAA-MM-DD>/`. Cada run começa do zero.
 - Roda **grátis**, no PC do operador, via Chrome real **headful** (patchright resolve o
@@ -93,8 +102,9 @@ python -m comc_scanner scan --group all                           # 4 grupos em 
 python -m comc_scanner scan --sets "Base Set,Jungle" --era vintage
 ```
 
-Flags do `scan`: `--group N|all` xor `--sets` (igualdade exata do nome do set — nunca
-substring); `--era`; `--min-discount 20` (inteiro); `--min-price 10`; `--max-price`
+Flags do `scan`: `--group N|all` xor `--sets` (igualdade exata do nome/alias/abreviação
+do set — nunca substring: `"Base Set"` não pega "Base Set 2"; `"151"` NÃO casa
+"SV: Scarlet & Violet 151" — use o nome completo, `"Scarlet & Violet 151"` ou `--group`); `--era`; `--min-discount 20` (inteiro); `--min-price 10`; `--max-price`
 (teto de orçamento por carta, corta antes do PriceCharting); `--max-english N`
 (encerra o set após N listagens INGLESAS válidas — japonesas não contam; 0 = todas as
 páginas); `--raw-only` / `--slabs-only`; `--all-pokemon`; `--chase-only`;
@@ -124,7 +134,7 @@ Configuração por env (`.env.example` lista tudo): `MIN_DISCOUNT_PERCENT`,
 ## Testes
 
 ```bash
-python -m pytest tests/    # 146 testes — offline, sem rede, sem browser
+python -m pytest tests/    # 157 testes — offline, sem rede, sem browser
 ```
 
 `tests/fixtures/` traz páginas REAIS: vitrine ungraded (2026-06-08), duas vitrines

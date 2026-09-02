@@ -46,9 +46,15 @@ def test_median_requires_three_sales_and_uses_recent_window():
     assert n == 10 and med == 10.5  # 10 mais recentes: 6..15 -> mediana 10.5
 
 
+def _day(i):
+    """Data ISO de `i` dias atrás (mantém as vendas sintéticas dentro da janela de recência)."""
+    import datetime as dt
+    return (pc._today() - dt.timedelta(days=i)).isoformat()
+
+
 def _page_with_sales(prices, label="BGS 9.5 GEM MINT", table="completed-auctions-box-only"):
     rows = "".join(
-        f'<tr id="ebay-{i}"><td class="date">2026-08-{i:02d}</td><td>Charizard ex 006 {label}</td>'
+        f'<tr id="ebay-{i}"><td class="date">{_day(i)}</td><td>Charizard ex 006 {label}</td>'
         f'<td><span class="js-price">${p:.2f}</span></td></tr>' for i, p in enumerate(prices, 1))
     return ('<div id="full-prices"><table><tr><td>Grade 9.5</td><td>$25.00</td></tr>'
             '<tr><td>TAG 10</td><td>$77.00</td></tr></table></div>'
@@ -62,7 +68,7 @@ def test_graded_reference_uses_sales_median_when_no_exact_column(monkeypatch, tm
     ref = pc.graded_reference("Charizard ex", "6", "SV: Scarlet & Violet 151",
                               parse_grade("BGS", "9_5", ""), cache_dir=str(tmp_path))
     assert ref is not None and ref.method == "sales" and ref.n_sales == 4
-    assert ref.price == 95.0 and ref.grade_key == "vendas BGS 9.5 (n=4)"
+    assert ref.price == 95.0 and ref.grade_key.startswith("vendas BGS 9.5 (n=4, ")
 
 
 def test_graded_reference_falls_back_to_generic_bucket_only_as_proxy(monkeypatch, tmp_path):

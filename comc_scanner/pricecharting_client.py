@@ -17,11 +17,14 @@ console do PC tem que ser exatamente o set — nada de tiragem japonesa/coreana)
 """
 from __future__ import annotations
 
+import datetime as _dt
 import gzip
 import html as html_mod
+import logging
 import os
 import re
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -42,8 +45,8 @@ FULL_TABLE_GRADE_BY_LABEL = {
     "Ungraded": "RAW",
     "Grade 7": "GRADE 7",
     "Grade 8": "GRADE 8",
-    "Grade 9": "PSA 9",
-    "Grade 9.5": "GRADE 9.5",
+    "Grade 9": "GRADE 9",      # bucket genérico (todas as certificadoras) — só triagem
+    "Grade 9.5": "GRADE 9.5",  # idem
     "PSA 10": "PSA 10",
     "BGS 10": "BGS 10",
     "CGC 10": "CGC 10",
@@ -62,12 +65,22 @@ SALES_TABLES = (
 )
 MIN_COMPARABLE_SALES = 3   # mediana só com ≥3 vendas da MESMA certificadora+nota
 SALES_WINDOW = 10          # mediana das 10 mais recentes (anti-outlier)
+SALES_MAX_AGE_DAYS = 180   # venda mais velha que isto não conta (preço de 2019 ≠ hoje)
+MIN_PAGE_BYTES = 2000      # corpo menor = página de bloqueio/erro, não cachear
+_BLOCK_TITLE_RE = re.compile(
+    r"<title>[^<]*(Just a moment|Attention Required|Access denied|Rate limit)", re.I)
+
+log = logging.getLogger("comc_scanner.pricecharting")
+
+
+class PcError(RuntimeError):
+    """Fonte PriceCharting FALHOU (rede, bloqueio, layout) — distinto de 'sem venda'."""
 # Tabela principal (#price_data) usa ids herdados de videogame:
 MAIN_TABLE_GRADE_BY_ID = {
     "used_price": "RAW",
     "complete_price": "GRADE 7",
     "new_price": "GRADE 8",
-    "graded_price": "PSA 9",
+    "graded_price": "GRADE 9",
     "box_only_price": "GRADE 9.5",
     "manual_only_price": "PSA 10",
 }
@@ -119,9 +132,14 @@ def fetch_page(url: str, cache_dir: str | None = None) -> str:
             data = r.read()
             if r.headers.get("Content-Encoding") == "gzip":
                 data = gzip.decompress(data)
+    except (urllib.error.URLError, OSError, gzip.BadGzipFile) as exc:
+        raise PcError(f"PriceCharting indisponível ({exc}) em {url}") from exc
     finally:
         _last_request_at[0] = time.time()  # também em falha: não martelar no retry
     body = data.decode("utf-8", errors="replace")
+    # Nunca cachear página de bloqueio/erro/vazia: seria re-servida o dia inteiro.
+    if len(body) < MIN_PAGE_BYTES or _BLOCK_TITLE_RE.search(body):
+        raise PcError(f"PriceCharting devolveu página de bloqueio/vazia ({len(body)} B) em {url}")
     tmp = cache_path.with_suffix(".tmp")
     tmp.write_text(body, encoding="utf-8")
     os.replace(tmp, cache_path)
@@ -195,23 +213,49 @@ def parse_graded_sales(body: str) -> list[dict]:
 
 
 _LANG_NOISE = re.compile(r"\b(japanese|korean|chinese|german|french|italian|spanish)\b", re.I)
+# Qualquer menção "<certificadora> <nota>" no título — usada para exigir que o
+# anúncio cite UMA só nota (título "PSA 9 … comps PSA 10" não entra em nenhuma cesta).
+_ANY_GRADE_RE = re.compile(
+    r"\b(PSA|BGS|CGC|SGC|TAG|ACE|MNT)\s*-?\s*(10|[1-9](?:\.5)?)(?![\d.])", re.I)
 
 
 def comparable_sales(sales: list[dict], grader: str, value: float, qualifier: str = "") -> list[dict]:
-    """Só vendas cujo título nomeia a MESMA certificadora e nota (e 'Pristine' quando
-    exigido), em inglês. 'PSA 9' não casa 'PSA 9.5' nem 'BGS 9'."""
-    val = f"{value:g}".replace(".", r"\.")
-    pat = re.compile(rf"\b{re.escape(grader)}\s*-?\s*{val}(?![\d.])", re.I)
+    """Só vendas cujo título nomeia a MESMA certificadora e nota — e SÓ ela —, em inglês,
+    com preço > 0. 'PSA 9' não casa 'PSA 9.5' nem 'BGS 9'; CGC 10 exige 'Pristine'
+    logo após a nota quando qualifier=PRISTINE (e a ausência dele para GEM)."""
     out = []
     for s in sales:
         t = s["title"]
-        if not pat.search(t) or _LANG_NOISE.search(t):
+        if s.get("price", 0) <= 0 or _LANG_NOISE.search(t):
             continue
-        if qualifier == "PRISTINE" and "pristine" not in t.lower():
-            continue
-        if qualifier == "GEM" and "pristine" in t.lower():
-            continue
+        mentions = {(g.upper(), float(v)) for g, v in _ANY_GRADE_RE.findall(t)}
+        if mentions != {(grader.upper(), float(value))}:
+            continue  # nenhuma menção, outra nota, ou mais de uma nota citada
+        if grader.upper() == "CGC" and value == 10.0:
+            pristine = re.search(r"\bCGC\s*-?\s*10\s*(?:Pristine)\b", t, re.I) is not None
+            if qualifier == "PRISTINE" and not pristine:
+                continue
+            if qualifier == "GEM" and pristine:
+                continue
         out.append(s)
+    return out
+
+
+def _today() -> _dt.date:
+    return _dt.datetime.now(_dt.timezone.utc).date()
+
+
+def recent_only(sales: list[dict], max_age_days: int = SALES_MAX_AGE_DAYS) -> list[dict]:
+    """Descarta vendas mais velhas que `max_age_days` (data 'AAAA-MM-DD')."""
+    cutoff = _today() - _dt.timedelta(days=max_age_days)
+    out = []
+    for s in sales:
+        try:
+            d = _dt.date.fromisoformat(str(s["date"])[:10])
+        except ValueError:
+            continue
+        if d >= cutoff:
+            out.append(s)
     return out
 
 
@@ -225,6 +269,13 @@ def median_recent(sales: list[dict], n_min: int = MIN_COMPARABLE_SALES,
     mid = len(prices) // 2
     med = prices[mid] if len(prices) % 2 else (prices[mid - 1] + prices[mid]) / 2.0
     return round(med, 2), len(prices)
+
+
+def _date_span(sales: list[dict], window: int = SALES_WINDOW) -> str:
+    recent = sorted(sales, key=lambda s: s["date"], reverse=True)[:window]
+    if not recent:
+        return ""
+    return f"{recent[-1]['date'][:7]}..{recent[0]['date'][:7]}"
 
 
 def search_card_paths(body: str) -> list[str]:
@@ -342,19 +393,22 @@ def graded_reference(card_name, number, set_label, grade,
     base_name = clean_card_name(card_name)
     num = norm_number(number)
     query = " ".join(p for p in ("pokemon", set_name, base_name, num) if p)
-    try:
-        body = fetch_page(f"{BASE_URL}/search-products?q={urllib.parse.quote(query)}&type=prices",
-                          cache_dir=cache_dir)
-        path = choose_path(search_card_paths(body), card_name, number, set_label)
-        if not path:
-            return None
-        url = BASE_URL + path
-        page = fetch_page(url, cache_dir=cache_dir)
-        prices = parse_grade_prices(page)
-        sales = comparable_sales(parse_graded_sales(page), grade.grader, grade.value,
-                                 grade.qualifier)
-    except Exception:  # noqa: BLE001 — rede/parse é best-effort; falha → sem referência
+    # Rede/bloqueio → PcError (o pipeline conta como ERRO da fonte, não como "sem venda").
+    body = fetch_page(f"{BASE_URL}/search-products?q={urllib.parse.quote(query)}&type=prices",
+                      cache_dir=cache_dir)
+    path = choose_path(search_card_paths(body), card_name, number, set_label)
+    if not path:
+        log.info("PC: sem página que case '%s' #%s (%s).", base_name, num, set_name)
         return None
+    url = BASE_URL + path
+    page = fetch_page(url, cache_dir=cache_dir)
+    prices = parse_grade_prices(page)
+    all_sales = parse_graded_sales(page)
+    if not prices and not all_sales:
+        # Página carregou mas sem NENHUMA tabela conhecida: layout mudou ou bloqueio
+        # disfarçado — é erro de fonte, não "carta sem vendas".
+        raise PcError(f"PriceCharting sem tabelas de preço/vendas em {url} (layout mudou?)")
+    sales = recent_only(comparable_sales(all_sales, grade.grader, grade.value, grade.qualifier))
     median, n = median_recent(sales)
     pc_key, proxy = pc_price_key(grade)
     column = prices.get(pc_key) if pc_key else None
@@ -362,9 +416,11 @@ def graded_reference(card_name, number, set_label, grade,
         return GradedRef(price=float(column), grade_key=pc_key, url=url, method="column",
                          n_sales=n, sales_median=median)
     if median is not None:
-        return GradedRef(price=median, grade_key=f"vendas {grade.key} (n={n})", url=url,
-                         method="sales", n_sales=n, sales_median=median)
+        return GradedRef(price=median, url=url, method="sales", n_sales=n, sales_median=median,
+                         grade_key=f"vendas {grade.key} (n={n}, {_date_span(sales)})")
     if column is not None and column > 0 and proxy:
         return GradedRef(price=float(column), grade_key=pc_key, url=url, method="proxy",
                          n_sales=n, sales_median=None)
+    log.info("PC: %s sem coluna exata nem ≥%d vendas recentes de %s (%d achadas).",
+             base_name, MIN_COMPARABLE_SALES, grade.key, n)
     return None
