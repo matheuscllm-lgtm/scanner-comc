@@ -19,7 +19,8 @@ def test_parse_graded_sales_from_real_page():
     assert all(s["date"] and s["price"] > 0 and s["title"] for s in sales)
     psa9 = pc.comparable_sales(sales, "PSA", 9.0)
     assert len(psa9) >= 3 and all("PSA 9" in s["title"].upper() for s in psa9)
-    assert not pc.comparable_sales(sales, "BGS", 9.5)  # nenhuma venda BGS 9.5 nesta página
+    # poucas vendas BGS 9.5 nesta página (< 3) -> não bastam para uma mediana
+    assert len(pc.comparable_sales(sales, "BGS", 9.5)) < pc.MIN_COMPARABLE_SALES
 
 
 def test_comparable_sales_exact_grader_and_grade_only():
