@@ -122,7 +122,8 @@ def classify_row(row: dict, trust: float = TRUST_CONFIDENCE) -> tuple[str, list[
         try:
             col = float(row.get("tcg_reference") or 0.0)
             med = row.get("ref_sales_median")
-            n = int(row.get("ref_n_sales") or 0)
+            raw_n = row.get("ref_n_sales")
+            n = -1 if raw_n is None else int(raw_n)  # ausente = desconhecido, não zero
             if n == 0:
                 reasons.append("sem-vendas-recentes")
             elif med is not None and col > 0 and n >= 3 and abs(col - float(med)) / col > 0.30:

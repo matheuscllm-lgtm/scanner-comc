@@ -186,3 +186,14 @@ def test_exact_column_without_recent_sales_is_match_review(index, monkeypatch):
     sc = pl.Scanner(_settings())
     d = sc.process_listing(_slab(69.25, "CGC 10 PRISTINE", "CGC"), index, CTX, pl.KIND_SLAB)
     assert d is not None and d.status == "MATCH_REVIEW" and "sem-vendas-recentes" in d.review_reasons
+
+
+def test_missing_ref_n_sales_is_unknown_not_zero():
+    """Payload antigo sem o campo ref_n_sales: contagem DESCONHECIDA, não zero — não pode
+    virar `sem-vendas-recentes` (achado do review da PR #27)."""
+    row = {"confidence": 0.95, "price_field": "market", "ref_source": "pricecharting",
+           "listing_type": "PSA 10", "tcg_reference": 99.99}
+    status, reasons = classify_row(row)
+    assert status == "OK" and "sem-vendas-recentes" not in reasons
+    row["ref_n_sales"] = 0
+    assert classify_row(row) == ("MATCH_REVIEW", ["sem-vendas-recentes"])

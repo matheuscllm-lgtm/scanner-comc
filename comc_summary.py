@@ -100,8 +100,10 @@ def build_markdown(payload: dict, group: int | None = None) -> str:
     footer = [
         f"_MATCH_REVIEW = confiança de match < {trust:.2f}, preço de referência "
         "mid/low (fallback, não é venda real), slab só com bucket genérico do "
-        "PriceCharting (`PC GRADE 9.5~`, triagem) ou coluna >30% longe das vendas "
-        "recentes (`ref÷vendas`) — conferir manualmente antes de qualquer decisão. "
+        "PriceCharting (`PC GRADE 9.5~`, triagem), coluna >30% longe das vendas "
+        "recentes (`ref÷vendas`) ou coluna exata sem nenhuma venda recente da mesma "
+        "nota (`sem-vendas-recentes`, preço de tabela sem liquidez que o sustente) — "
+        "conferir manualmente antes de qualquer decisão. "
         "`PC vendas <nota> (n=…, mês..mês)` = mediana de ≥3 vendas concluídas da mesma "
         "certificadora+nota nos últimos 180 dias. "
         "Ranking: ROI → desconto % → lucro US$ → popularidade do Pokémon. "
