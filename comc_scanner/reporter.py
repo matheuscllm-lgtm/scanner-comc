@@ -51,6 +51,25 @@ _TABLE_COLS = [
 ]
 _MAXW = {"card_number": 34, "set": 26, "condition": 10, "sub_type": 16}
 
+# Tabela do modo --iconic: DUAS referências lado a lado (TCG$ = market
+# TCGplayer/tcgcsv; PC$ = mediana de vendas reais PriceCharting) e as duas
+# margens; a que CLASSIFICA é a mais conservadora (comc_scanner.iconic). Links
+# ganham o 3º link [PC] quando a referência PC existe.
+_ICONIC_TABLE_COLS = [
+    ("rank", "#"),
+    ("margin_pct", "Marg TCG%"),
+    ("pc_margin_pct", "Marg PC%"),
+    ("comc_price", "COMC$"),
+    ("tcg_reference", "TCG$"),
+    ("pc_reference", "PC$"),
+    ("card_number", "Card"),
+    ("set", "Set"),
+    ("condition", "Cond"),
+    ("confidence", "Conf"),
+    ("flag", "Flag"),
+    ("links", "Links"),
+]
+
 
 def _flag_for(row: dict) -> str:
     """Per-row review flag.
@@ -75,27 +94,33 @@ def _flag_for(row: dict) -> str:
     return flag
 
 
-def _links_cell(row: dict) -> str:
+def _links_cell(row: dict, with_pc: bool = False) -> str:
     """Coluna `Links`: "[oferta](comc_url) · [referência](tcg_url)".
 
     Espelha o formato canônico cross-scanner (MYP `delivery_links`, Liga `_links`):
     `oferta` = listagem na COMC; `referência` = preço de referência no TCGPlayer. Os
     dois links são lidos do deal (nunca inventados); emite só os que existirem e "—"
-    se nenhum.
+    se nenhum. No modo icônico (`with_pc`) acrescenta `[PC](pc_url)` — a página de
+    vendas reais do PriceCharting — quando ela existe.
     """
     parts = []
     comc_url = "" if row.get("comc_url") is None else str(row.get("comc_url"))
     tcg_url = "" if row.get("tcg_url") is None else str(row.get("tcg_url"))
+    pc_url = "" if row.get("pc_url") is None else str(row.get("pc_url"))
     if comc_url:
         parts.append(f"[oferta]({comc_url})")
     if tcg_url:
         parts.append(f"[referência]({tcg_url})")
+    if with_pc and pc_url:
+        parts.append(f"[PC]({pc_url})")
     return " · ".join(parts) if parts else "—"
 
 
 def _cell(key: str, value: object) -> str:
     if key == "links":  # pre-built markdown links cell — render verbatim
         return "" if value is None else str(value)
+    if value is None and key in ("pc_reference", "pc_margin_pct"):
+        return "—"  # sem PriceCharting: honesto, nunca 0
     s = "" if value is None else str(value)
     w = _MAXW.get(key)
     if w and len(s) > w:
@@ -128,17 +153,59 @@ def render_rows_table(rows: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def render_markdown(deals: list[Deal], era: str, top_n: int) -> str:
-    title = f"### COMC deals — era: {era} — top {min(len(deals), top_n)} (margem desc.)"
+# --- modo --iconic ---------------------------------------------------------
+
+def iconic_table_header_lines() -> list[str]:
+    header = "| " + " | ".join(label for _, label in _ICONIC_TABLE_COLS) + " |"
+    sep = "| " + " | ".join("---" for _ in _ICONIC_TABLE_COLS) + " |"
+    return [header, sep]
+
+
+def render_iconic_row_line(row: dict, rank: int) -> str:
+    """Linha da tabela icônica: flag = `_flag_for` (validar / preço:<campo>) +
+    flags do modo (`sem PC`, `PC diverge`); Links com o 3º link [PC]."""
+    from .iconic import iconic_flags  # local: evita import circular
+
+    row = dict(row)
+    row["rank"] = rank
+    row["flag"] = " · ".join([_flag_for(row), *iconic_flags(row)])
+    row["links"] = _links_cell(row, with_pc=True)
+    return "| " + " | ".join(_cell(k, row.get(k, "")) for k, _ in _ICONIC_TABLE_COLS) + " |"
+
+
+def render_iconic_rows_table(rows: list[dict]) -> str:
+    lines = iconic_table_header_lines()
+    lines.extend(render_iconic_row_line(row, rank) for rank, row in enumerate(rows, 1))
+    return "\n".join(lines)
+
+
+def render_markdown(deals: list[Deal], era: str, top_n: int, iconic: bool = False) -> str:
+    label = "COMC deals (icônicos)" if iconic else "COMC deals"
+    title = f"### {label} — era: {era} — top {min(len(deals), top_n)} (margem desc.)"
     if not deals:
         return title + "\n\n_(nenhum deal acima do limiar ainda)_"
-    return "\n".join([title, "", render_rows_table([d.as_row() for d in deals[:top_n]])])
+    rows = [d.as_row() for d in deals[:top_n]]
+    table = render_iconic_rows_table(rows) if iconic else render_rows_table(rows)
+    return "\n".join([title, "", table])
 
 
 class Reporter:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.settings.results_dir.mkdir(parents=True, exist_ok=True)
+        # Modo --iconic: enriquece com PriceCharting a cada flush e grava em
+        # arquivos PRÓPRIOS (comc_iconic_<era>_*) para não sobrescrever um scan
+        # clássico da mesma era.
+        self.iconic = bool(settings.iconic_only)
+        self._enricher = None
+        if self.iconic:
+            from .iconic import PriceChartingEnricher
+
+            self._enricher = PriceChartingEnricher(settings)
+
+    @property
+    def file_prefix(self) -> str:
+        return "comc_iconic" if self.iconic else "comc_deals"
 
     def _write_csv(self, rows: list[dict], path: Path) -> None:
         if not rows:
@@ -157,25 +224,32 @@ class Reporter:
     ) -> str:
         """Write latest + timestamped CSV/JSON, print the markdown table, push Sheets."""
         deals = sorted(deals, key=lambda d: d.margin, reverse=True)[: self.settings.top_n]
+        low_confidence = list(low_confidence or [])
+        if self._enricher is not None:
+            self._enricher.enrich(deals + low_confidence)
         rows = [{"rank": i, **d.as_row()} for i, d in enumerate(deals, 1)]
         stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
         rdir = self.settings.results_dir
+        prefix = self.file_prefix
 
-        self._write_csv(rows, rdir / f"comc_deals_{era}_latest.csv")
-        self._write_csv(rows, rdir / f"comc_deals_{era}_{stamp}.csv")
+        self._write_csv(rows, rdir / f"{prefix}_{era}_latest.csv")
+        self._write_csv(rows, rdir / f"{prefix}_{era}_{stamp}.csv")
         payload = {
             "era": era,
             "generated_utc": stamp,
+            "mode": "iconic" if self.iconic else "classic",
             "min_gross_margin": self.settings.min_gross_margin,
+            "max_gross_margin": self.settings.max_gross_margin,
+            "pricecharting": bool(self.iconic and self.settings.pricecharting_enabled),
             "top_n": self.settings.top_n,
             "count": len(rows),
             "deals": rows,
-            "low_confidence": [d.as_row() for d in (low_confidence or [])],
+            "low_confidence": [d.as_row() for d in low_confidence],
         }
-        self._write_json(payload, rdir / f"comc_deals_{era}_latest.json")
-        self._write_json(payload, rdir / f"comc_deals_{era}_{stamp}.json")
+        self._write_json(payload, rdir / f"{prefix}_{era}_latest.json")
+        self._write_json(payload, rdir / f"{prefix}_{era}_{stamp}.json")
 
-        table = render_markdown(deals, era, self.settings.top_n)
+        table = render_markdown(deals, era, self.settings.top_n, iconic=self.iconic)
         print("\n" + table + "\n")
         self._maybe_push_to_sheets(rows, era)
         return table

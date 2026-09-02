@@ -29,6 +29,10 @@ python -m comc_scanner list-groups
 # allowlist AND the era — SV groups 1-2 = recent, WotC groups 3-4 = vintage):
 python -m comc_scanner targeted --group 1 --fetch-mode playwright --headful --no-sheets --restart
 
+# Curated-name mode: only items whose name is on the curated list, a second
+# reference source, and a discount BAND (fraction: 0.30-0.40 by default):
+python -m comc_scanner targeted --group 1 --iconic --fetch-mode playwright --headful --no-sheets --restart
+
 # Targeted scan by era (the pre-groups route; still supported):
 python -m comc_scanner targeted --era recent --fetch-mode playwright --no-sheets --restart
 

@@ -65,6 +65,12 @@ class Deal:
     match_confidence: float
     match_reason: str
     era: str = ""
+    # --- modo --iconic (todos opcionais; vazios fora do modo) ---
+    notorious: str | None = None      # personagem icônico casado (ex. "Charizard")
+    pc_reference: float | None = None  # mediana das vendas reais ungraded (PriceCharting)
+    pc_n_sales: int = 0
+    pc_url: str = ""
+    pc_margin: float | None = None     # mesma fórmula da margem TCG, base = pc_reference
 
     def as_row(self) -> dict[str, object]:
         """Flat dict for CSV/JSON/markdown output (Google-Sheets friendly)."""
@@ -92,4 +98,10 @@ class Deal:
             "quantity": self.listing.quantity,
             "comc_url": self.listing.url,
             "tcg_url": self.product.url,
+            # modo --iconic: "" / None fora dele (o CSV/JSON continua plano)
+            "notorious": self.notorious or "",
+            "pc_reference": None if self.pc_reference is None else round(self.pc_reference, 2),
+            "pc_n_sales": self.pc_n_sales,
+            "pc_margin_pct": None if self.pc_margin is None else round(self.pc_margin * 100, 2),
+            "pc_url": self.pc_url,
         }

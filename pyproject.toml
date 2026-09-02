@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "comc-scanner"
-version = "0.2.0"
+version = "0.3.0"
 description = "COMC -> TCGPlayer arbitrage scanner for Pokemon TCG singles (gross margin > 30%)"
 readme = "README.md"
 requires-python = ">=3.10"

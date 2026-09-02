@@ -14,6 +14,7 @@ from .comc_scraper import ComcAccessError, ComcScraper, listings_from_json, pars
 from .firecrawl_client import ComcBlockedError
 from .matcher import match
 from .models import Deal
+from .notorious import iconic_name_for_product
 from .normalize import normalize_set, set_aliases, set_contains
 from .reporter import Reporter
 from .segments import ChunkCursor, TcgSet, select_sets, to_sets
@@ -220,7 +221,7 @@ class Scanner:
             ts = self._resolve_tset(L.set_hint, amap)
             ctx = normalize_set(ts.name) if ts else None
             deal = match(L, index, self.settings, context_set_key=ctx)
-            if deal:
+            if deal and self._keep(deal):
                 deal.era = ts.era if ts else ""
                 best.add(deal, gate, thr)
         label = era if era != "all" else "dryrun"
@@ -276,7 +277,7 @@ class Scanner:
                                         or not self._price_ok(L)):
                                     continue
                                 deal = match(L, index, self.settings, context_set_key=ctx)
-                                if deal and self._chase_ok(deal.product):
+                                if deal and self._keep(deal):
                                     deal.era = ts.era
                                     best.add(deal, gate, thr)
                             last_page = page_no
@@ -382,7 +383,7 @@ class Scanner:
                                 or not self._price_ok(L)):
                             continue
                         deal = match(L, index, self.settings)
-                        if deal and self._chase_ok(deal.product):
+                        if deal and self._keep(deal):
                             matched += 1
                             deal.era = era
                             best.add(deal, gate, thr)
@@ -445,6 +446,27 @@ class Scanner:
         min_comc_price=0 disables the floor."""
         floor = self.settings.min_comc_price
         return floor <= 0 or listing.price >= floor
+
+    def _keep(self, deal) -> bool:
+        """Filtros pós-match compostos: raridade chase (`--chase-only`) e, no modo
+        `--iconic`, só cartas de Pokémon da lista curada (notorious.py) — o nome
+        casado é gravado em `deal.notorious` para a entrega."""
+        if not self._chase_ok(deal.product):
+            return False
+        return self._iconic_ok(deal)
+
+    def _iconic_ok(self, deal) -> bool:
+        """Modo icônico: mantém só produtos cujo nome TCGplayer contém um Pokémon
+        da lista curada e cujo `Card Type` não é Trainer/Energy. No-op (True)
+        fora do modo. Match pelo nome do PRODUTO (canônico), não pelo título
+        cru da COMC."""
+        if not self.settings.iconic_only:
+            return True
+        name = iconic_name_for_product(deal.product.name, deal.product.card_type)
+        if name is None:
+            return False
+        deal.notorious = name
+        return True
 
     def _chase_ok(self, product) -> bool:
         """Value-buy mode: keep only chase rarities. Bulk rarities (Common/Uncommon/plain
@@ -551,7 +573,7 @@ class Scanner:
                                         or not self._price_ok(L)):
                                     continue
                                 deal = match(L, index, self.settings, context_set_key=ctx)
-                                if deal and self._chase_ok(deal.product):
+                                if deal and self._keep(deal):
                                     deal.era = ts.era
                                     best.add(deal, gate, thr)
                             if time.time() >= next_flush:

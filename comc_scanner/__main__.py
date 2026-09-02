@@ -22,6 +22,17 @@ def _add_common(p: argparse.ArgumentParser) -> None:
                    help="min COMC ask in USD (default 10 = the R$50 floor; 0 disables)")
     p.add_argument("--chase-only", action="store_true",
                    help="value-buy mode: keep only chase rarities (drops Common/Uncommon/Rare)")
+    p.add_argument("--iconic", action="store_true",
+                   help="ICONIC mode: only cards of the curated iconic Pokémon list "
+                        "(notorious.py), PriceCharting real-sales median as 2nd reference, "
+                        "and a discount BAND [--min-margin, --max-margin] (default 0.30-0.40); "
+                        "results go to results/comc_iconic_<era>_*")
+    p.add_argument("--max-margin", type=float,
+                   help="max gross margin of the band (FRACTION, e.g. 0.40); rows above it "
+                        "are flagged 'acima da faixa' (review), never clean. Default 0.40 "
+                        "with --iconic, none otherwise")
+    p.add_argument("--no-pricecharting", action="store_true",
+                   help="--iconic: skip the PriceCharting lookup (TCGplayer reference only)")
     p.add_argument("--min-confidence", type=float, help="min match confidence for top list")
     p.add_argument("--margin-mode", choices=["gross", "markup"], help="margin formula")
     # --sets and --group are two ways to build the same set allowlist — never both.
@@ -52,6 +63,14 @@ def _apply_overrides(settings, args) -> None:
         settings.min_comc_price = args.min_price
     if args.chase_only:
         settings.chase_only = True
+    if getattr(args, "iconic", False):
+        settings.iconic_only = True
+        if settings.max_gross_margin is None:
+            settings.max_gross_margin = 0.40  # a faixa canônica 30-40% do pedido
+    if getattr(args, "max_margin", None) is not None:
+        settings.max_gross_margin = args.max_margin
+    if getattr(args, "no_pricecharting", False):
+        settings.pricecharting_enabled = False
     if args.min_confidence is not None:
         settings.min_match_confidence = args.min_confidence
     if args.margin_mode:

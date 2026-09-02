@@ -32,7 +32,7 @@ Erros recorrentes (3 famílias — detalhe no manual):
 2. **Git:** branch ou `main` local defasado por squash-merge PARECE pendência. O teste real de "já mergeado" é `git diff --stat origin/main <branch>` estar vazio (não `git merge-base`).
 3. **Honestidade de preço:** inflação de referência, fallback tratado como real, NM frouxo → sempre validar versão/condição e rotular fallback.
 
-**Este scanner:** referência de preço = `tcgcsv.com` (campo market → mid → low, rastreado em `price_field` e sinalizado no chat) → **fallback TCGdex** (mesmo marketPrice do TCGplayer por productId, quando o tcgcsv falha num set); chave = `FIRECRAWL_API_KEY` — usada por **qualquer run no fetch-mode default `firecrawl`** (local ou nuvem); só `--fetch-mode playwright` (navegador local de verdade) dispensa a key.
+**Este scanner:** referência de preço = `tcgcsv.com` (campo market → mid → low, rastreado em `price_field` e sinalizado no chat) → **fallback TCGdex** (mesmo marketPrice do TCGplayer por productId, quando o tcgcsv falha num set); no modo `--iconic` entra uma **2ª referência = PriceCharting** (mediana de vendas reais, sinal + classificação conservadora — ver seção própria); chave = `FIRECRAWL_API_KEY` — usada por **qualquer run no fetch-mode default `firecrawl`** (local ou nuvem); só `--fetch-mode playwright` (navegador local de verdade) dispensa a key.
 
 ## O que este projeto é
 
@@ -79,6 +79,61 @@ Quando o operador pedir "resultados", "deals", "panorama" ou similar:
      (ex.: `preço:mid`) — sinalização honesta de preço menos confiável.
 5. **Não recomende comprar.** O scanner reporta dados; a decisão de capital é do
    operador. Pode comentar quais linhas estão `validar`, mas não diga "compre".
+
+## 🌟 Modo `--iconic`: personagens icônicos, faixa 30-40%, TCGplayer + PriceCharting (2026-09-02)
+
+> **Pedido do operador (2026-09-02):** um scan da COMC só de cartas dos
+> Pokémon mais icônicos, com preço **30-40% abaixo** da referência do
+> PriceCharting e do TCGplayer. Como a compra fica **armazenada na conta COMC**
+> do operador, não há frete nem taxa por compra — a margem é a bruta pura, que
+> já é a fórmula default do repo (`(referência − COMC)/referência` = "X% abaixo").
+> Skill: **`scan-comc-iconic`** (`.claude/skills/scan-comc-iconic/SKILL.md`) —
+> mesmos 4 grupos do `scan-comc`, pergunta qual rodar, entrega via `comc_summary.py`.
+
+```powershell
+python -m comc_scanner targeted --group <N> --iconic --top-n 200 --fetch-mode playwright --headful --no-sheets --restart
+python comc_summary.py results/comc_iconic_<era>_latest.json -o results/comc-iconicos-grupo<N>-<data>.md --group <N>
+```
+
+O que o `--iconic` muda (tudo o mais — NM/EN, piso US$10, Cloudflare, cursor —
+é igual ao clássico):
+
+- **Escopo = lista curada** `comc_scanner/notorious.py` (~60 Pokémon: Charizard,
+  Pikachu, eeveelutions, Mewtwo, Lugia, Rayquaza...; portada do
+  `integrated-scanner`). Match por palavra inteira no nome do PRODUTO
+  TCGplayer ("Charizardite" não casa); Trainer/Energy nunca contam (`Card
+  Type` do tcgcsv). O personagem casado vai na coluna `notorious` do CSV/JSON.
+- **2ª referência = PriceCharting** (`comc_scanner/pricecharting.py`): mediana
+  das **10 vendas reais** ungraded mais recentes (metodologia aprovada em
+  2026-08-28 no card-trader-scanner). Guardas: o slug tem que casar
+  nome+número+variante (oferta reverse → só página reverse; 1st Edition → só
+  página 1st-edition; produto com parêntese, ex. "(Black Dot Error)", nunca
+  cai na página base) e o console tem que ser o set exato (japonês nunca
+  casa). Falha/sem match/sem vendas → `—` + flag **`sem PC`** — nunca inventa.
+  Cache 24 h em `.cache/pricecharting/`, 2 s entre requests, best-effort (o PC
+  fora do ar não derruba o scan; `--no-pricecharting` desliga).
+- **Margem que classifica = a mais CONSERVADORA** entre `Marg TCG%` e
+  `Marg PC%` (`comc_scanner/iconic.py`). Se qualquer fonte diz que o desconto é
+  menor, vale a menor. Referências discordando >40% → flag **`PC diverge`**
+  (ex. real 2026-09-02: Base Set Charizard market TCG US$868 vs mediana de
+  vendas US$329 — em vintage o market do TCGplayer infla; a conservadora
+  protege).
+- **Faixa** `[--min-margin, --max-margin]`, default **0.30–0.40 (FRAÇÃO)**:
+  dentro = 🟢 (limpa) ou ⚠️ (com qualquer flag: `validar`, `preço:mid|low`,
+  `sem PC`, `PC diverge`); **acima do teto = 🚨 "acima da faixa"** (desconto
+  grande demais é o sinal clássico da frota de variante/condição errada ou
+  anúncio-lixo — vai pra revisão, nunca 🟢); **abaixo = ❌** (a TCG dizia ≥30%
+  mas a conservadora rebaixou — mostrada, contrato "todas as linhas").
+- **Arquivos próprios** `results/comc_iconic_<era>_*` (não sobrescrevem o
+  scan clássico da mesma era); JSON com `mode: "iconic"`, que o
+  `comc_summary.py` reconhece sozinho → entrega em **4 baldes** com a tabela
+  `| # | Marg TCG% | Marg PC% | COMC$ | TCG$ | PC$ | Card | Set | Cond | Conf | Flag | Links |`
+  e `Links` = `[oferta] · [referência] · [PC]`. Env: `ICONIC_ONLY`,
+  `MAX_GROSS_MARGIN`, `PRICECHARTING_ENABLED`.
+- Contratos travados em `tests/test_notorious.py`, `tests/test_pricecharting.py`
+  e `tests/test_iconic.py` (32 testes offline). Prova real 2026-09-02:
+  `dry-run --iconic` com fixture de 6 listings do Base Set → 3 deals icônicos
+  (Clefairy/Professor Oak/Machamp-abaixo-do-corte fora), 3/3 com mediana PC.
 
 ## Como rodar
 
@@ -154,8 +209,8 @@ dispensa `--era`), `--max-pages`, `--max-sets-per-chunk`, `--max-run-seconds`,
   comandos de exemplo fazem. A entrega ao operador continua sendo a tabela no
   chat, nunca a planilha.
 - **Skill `/auto`** (`.claude/commands/auto.md`): agente master autônomo da
-  frota — modo ponta a ponta (corrigir + aprimorar, PR, checkpoints). É a única
-  skill/command deste repo.
+  frota — modo ponta a ponta (corrigir + aprimorar, PR, checkpoints). Skills de
+  scan: `scan-comc` (clássico) e `scan-comc-iconic` (modo `--iconic`).
 
 ### GitHub Actions (existem, mas SEM agendamento — ver "Convenções que não mudam")
 
@@ -208,10 +263,10 @@ vazam) —, só que o mecanismo é banda + allowlist, não a string literal `"NM
 ## Testes
 
 ```bash
-python -m pytest tests/    # 110 testes — offline, sem rede, sem browser
+python -m pytest tests/    # 142 testes — offline, sem rede, sem browser
 ```
 
-(Contagem verificada em 2026-07-07 via `pytest --collect-only`; se divergir,
+(Contagem verificada em 2026-09-02 via `pytest -q`; se divergir,
 vale o que o comando disser.) `tests/fixtures/` traz páginas COMC reais salvas;
 `tests/test_reporter.py` trava o formato canônico de entrega.
 
@@ -233,10 +288,13 @@ comc_scanner/
   matcher.py           casa listing COMC ↔ carta TCG (confiança 0-1; <0.90 = flag validar)
   normalize.py         normalização de nomes/números/sets
   margin.py            cálculo de margem (gross/markup)
+  notorious.py         lista curada de ~60 Pokémon icônicos + matcher (escopo do --iconic)
+  pricecharting.py     2ª referência do --iconic: mediana de vendas reais ungraded (guardas de slug/console, cache 24h)
+  iconic.py            faixa 30-40%: margem conservadora TCG×PC, baldes faixa/acima/abaixo, flags sem PC / PC diverge, enricher
   reporter.py          render_markdown + render_rows_table/render_row_line (formatação de linha, fonte única) + JSON/CSV + push opcional Google Sheets
   models.py            dataclasses (listing, deal, ...)
   logging_setup.py     logging
-comc_summary.py        ENTREGA canônica ao operador (XLSX/JSON de scan → markdown por grupo, 2 seções); espelho do myp_summary.py
+comc_summary.py        ENTREGA canônica ao operador (JSON de scan → markdown por grupo: 2 seções no clássico, 4 baldes no --iconic); espelho do myp_summary.py
 tests/                 suíte offline (fixtures reais commitadas)
 results/               saídas de scan (gitignored; só o .gitkeep é versionado)
 ```
@@ -254,14 +312,11 @@ results/               saídas de scan (gitignored; só o .gitkeep é versionado
 
 ## Estado, pendências e histórico
 
-- **Versão: 0.2.0** (`pyproject.toml` + `CHANGELOG.md`, 2026-06-17 — entrega
-  canônica com 2 links + flag `validar`). 0.1.0 = versão inicial (scanner
-  COMC → TCGPlayer, tese value-buy, 28 sets validados, Playwright headful
-  grátis + Firecrawl, suíte offline).
-- ⚠️ **CHANGELOG desatualizado**: há features mergeadas DEPOIS de 0.2.0 sem bump
-  nem entrada — fallback TCGdex + cross-validação de set-total no matcher (#8),
-  sufixo `preço:<campo>` na Flag do chat (#9), fixes de revisão (#10),
-  sanitização BOM da key Firecrawl (#13). No próximo bump, registrar essas
-  entradas no `CHANGELOG.md`.
+- **Versão: 0.3.0** (`pyproject.toml` + `CHANGELOG.md`, 2026-09-02 — modo
+  `--iconic`: personagens icônicos, faixa 30-40%, 2ª referência PriceCharting;
+  o CHANGELOG também recebeu as entradas retroativas pós-0.2.0 — #8, #9, #10,
+  #13, #22, #24). 0.2.0 (2026-06-17) = entrega canônica com 2 links + flag
+  `validar`. 0.1.0 = versão inicial (scanner COMC → TCGPlayer, tese value-buy,
+  28 sets validados, Playwright headful grátis + Firecrawl, suíte offline).
 - Detalhe de cada mudança: `CHANGELOG.md` + histórico de PRs no GitHub
   (`matheuscllm-lgtm/scanner-comc`).

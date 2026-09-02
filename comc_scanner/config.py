@@ -129,6 +129,15 @@ class Settings:
     # These are the classes that hold/appreciate; bulk rarities rarely do.
     chase_only: bool = False
     chase_exclude_rarities: tuple[str, ...] = ("common", "uncommon", "rare")
+    # Modo --iconic (2026-09-02): só cartas de Pokémon ICÔNICOS (lista curada em
+    # notorious.py), 2ª referência = mediana de vendas reais do PriceCharting, e a
+    # margem que classifica é a mais CONSERVADORA das duas, dentro da FAIXA
+    # [min_gross_margin, max_gross_margin] (30-40% abaixo da referência). Acima do
+    # teto = 🚨 revisar (desconto grande demais costuma ser variante/condição
+    # errada), nunca 🟢. max_gross_margin=None = sem teto (modo clássico).
+    iconic_only: bool = False
+    max_gross_margin: float | None = None
+    pricecharting_enabled: bool = True
     top_n: int = 50
     scan_interval_s: int = 3600
     min_match_confidence: float = 0.80
@@ -199,6 +208,9 @@ def load_settings(env_file: Path | None = None) -> Settings:
                 "CHASE_EXCLUDE_RARITIES", "common,uncommon,rare"
             ).split(",") if r.strip()
         ),
+        iconic_only=_get_bool("ICONIC_ONLY", False),
+        max_gross_margin=(_get_float("MAX_GROSS_MARGIN", 0.0) or None),
+        pricecharting_enabled=_get_bool("PRICECHARTING_ENABLED", True),
         top_n=_get_int("TOP_N", 50),
         scan_interval_s=_get_int("SCAN_INTERVAL_SECONDS", 3600),
         min_match_confidence=_get_float("MIN_MATCH_CONFIDENCE", 0.80),
