@@ -84,7 +84,7 @@ def build_markdown(payload: dict, group: int | None = None) -> str:
         f"- Snapshot: {payload.get('generated_utc', '?')} (UTC) · {grupo}",
         f"- OK: {len(ok)} · MATCH_REVIEW: {len(review)} (sendo {n_low} do balde low-confidence)",
         f"- Desconto mínimo: {payload.get('min_discount_percent', '?')}% · piso US$"
-        f"{payload.get('min_comc_price', '?')} · raw só NM · só inglês · "
+        f"{payload.get('min_comc_price', '?')} · raw NM (WotC: NM/EX-NM) · só inglês · "
         f"Pokémon: {'lista icônica' if payload.get('iconic_only', True) else 'todos'}",
         f"- Slabs aceitos: {', '.join(graded) if graded else '—'}",
     ]
