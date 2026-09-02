@@ -12,8 +12,8 @@ from comc_scanner.config import load_settings
 from comc_scanner.grading import parse_grade
 from comc_scanner.models import ComcListing
 from comc_scanner.normalize import normalize_set
-from comc_scanner.pricecharting_client import GradedRef, PcError
-from comc_scanner.reporter import classify_row, funnel_lines
+from comc_scanner.pricecharting_client import PcError, SalesRef
+from comc_scanner.reporter import classify_row, funnel_lines, render_row_line
 from comc_scanner.tcg_index import TcgIndex
 
 SET = "SV: Scarlet & Violet 151"
@@ -138,6 +138,11 @@ def test_pc_error_is_counted_separately_and_trips_breaker(index, monkeypatch):
     assert sc.stats["slab_pc_error"] == 6
 
 
+def _ref(price, n=4, liquidity="ok", window=180, column=None, label="vendas PSA 10 (n=4, 2026-05..2026-08)"):
+    return SalesRef(price=price, n_sales=n, window_days=window, liquidity=liquidity,
+                    url="https://pc/x", label=label, column_price=column)
+
+
 def test_pc_error_counter_resets_after_success(index, monkeypatch):
     calls = {"n": 0}
 
@@ -145,8 +150,7 @@ def test_pc_error_counter_resets_after_success(index, monkeypatch):
         calls["n"] += 1
         if calls["n"] % 2:
             raise PcError("timeout")
-        return GradedRef(price=200.0, grade_key="PSA 10", url="https://pc/x", method="column",
-                         n_sales=3, sales_median=190.0)
+        return _ref(200.0)
 
     monkeypatch.setattr(pl, "graded_reference", flaky)
     sc = pl.Scanner(_settings())
@@ -155,16 +159,16 @@ def test_pc_error_counter_resets_after_success(index, monkeypatch):
     assert sc._pc_down is False and sc.stats["slab_pc_error"] == 4 and sc.stats["ok"] == 4
 
 
-def test_column_far_from_sales_median_is_match_review(index, monkeypatch):
-    monkeypatch.setattr(pl, "graded_reference",
-                        lambda *a, **k: GradedRef(price=500.0, grade_key="PSA 10", url="https://pc/x",
-                                                  method="column", n_sales=5, sales_median=220.0))
+def test_exact_column_far_from_sales_median_is_match_review(index, monkeypatch):
+    """A referência É a mediana de vendas (220); a coluna exata do PC (500) entra só como
+    sanidade: >30% de distância → MATCH_REVIEW · coluna÷vendas."""
+    monkeypatch.setattr(pl, "graded_reference", lambda *a, **k: _ref(220.0, n=5, column=500.0))
     sc = pl.Scanner(_settings())
-    d = sc.process_listing(_slab(300.0), index, CTX, pl.KIND_SLAB)
-    assert d is not None and d.status == "MATCH_REVIEW"
-    assert any(r.startswith("ref÷vendas(n=5:220.00)") for r in d.review_reasons)
+    d = sc.process_listing(_slab(150.0), index, CTX, pl.KIND_SLAB)
+    assert d is not None and d.tcg_reference == 220.0 and d.status == "MATCH_REVIEW"
+    assert any(r.startswith("coluna÷vendas") for r in d.review_reasons)
     row = d.as_row()
-    assert row["ref_sales_median"] == 220.0 and row["ref_n_sales"] == 5
+    assert row["ref_column_price"] == 500.0 and row["ref_n_sales"] == 5
 
 
 def test_classify_row_flags_slab_with_raw_reference_and_funnel_keeps_unknown_keys():
@@ -176,24 +180,35 @@ def test_classify_row_flags_slab_with_raw_reference_and_funnel_keeps_unknown_key
     assert lines[-1] == "outros: novo_contador=7"
 
 
-def test_exact_column_without_recent_sales_is_match_review(index, monkeypatch):
-    """Coluna exata (ex. CGC 10 Pristine) mas ZERO vendas recentes dessa nota: preço de
-    tabela sem liquidez que o sustente → MATCH_REVIEW · sem-vendas-recentes (caso real
-    Luxray ex, grupo 1, 2026-09-02)."""
-    monkeypatch.setattr(pl, "graded_reference",
-                        lambda *a, **k: GradedRef(price=99.99, grade_key="CGC 10 PRISTINE",
-                                                  url="https://pc/x", method="column", n_sales=0))
+def test_zero_comparable_sales_is_no_reference_never_a_deal(index, monkeypatch):
+    """Caso real Luxray ex (grupo 1, 2026-09-02): coluna exata CGC 10 Pristine no PC mas
+    ZERO vendas comparáveis → a fonte devolve None → sem referência, sem oportunidade
+    (contador `slab_no_reference`), nunca MATCH_REVIEW com preço de coluna."""
+    monkeypatch.setattr(pl, "graded_reference", lambda *a, **k: None)
     sc = pl.Scanner(_settings())
-    d = sc.process_listing(_slab(69.25, "CGC 10 PRISTINE", "CGC"), index, CTX, pl.KIND_SLAB)
-    assert d is not None and d.status == "MATCH_REVIEW" and "sem-vendas-recentes" in d.review_reasons
+    assert sc.process_listing(_slab(69.25, "CGC 10 PRISTINE", "CGC"), index, CTX, pl.KIND_SLAB) is None
+    assert sc.stats["slab_no_reference"] == 1 and sc.stats["ok"] == 0 and sc.stats["review"] == 0
+
+
+def test_thin_sales_is_match_review_and_low_liquidity_is_only_a_note(index, monkeypatch):
+    monkeypatch.setattr(pl, "graded_reference",
+                        lambda *a, **k: _ref(200.0, n=2, liquidity="thin", window=365))
+    sc = pl.Scanner(_settings())
+    d = sc.process_listing(_slab(100.0), index, CTX, pl.KIND_SLAB)
+    assert d is not None and d.status == "MATCH_REVIEW" and "vendas<3(n=2)" in d.review_reasons
+    monkeypatch.setattr(pl, "graded_reference",
+                        lambda *a, **k: _ref(200.0, n=4, liquidity="low", window=365))
+    d2 = sc.process_listing(_slab(101.0), index, CTX, pl.KIND_SLAB)
+    assert d2 is not None and d2.status == "OK" and d2.ref_liquidity == "low"
+    assert "baixa-liquidez" in render_row_line(d2.as_row(), 1)
 
 
 def test_missing_ref_n_sales_is_unknown_not_zero():
-    """Payload antigo sem o campo ref_n_sales: contagem DESCONHECIDA, não zero — não pode
-    virar `sem-vendas-recentes` (achado do review da PR #27)."""
-    row = {"confidence": 0.95, "price_field": "market", "ref_source": "pricecharting",
+    """Payload antigo sem o campo ref_n_sales: contagem DESCONHECIDA — não vira
+    `vendas<3`. Com n=2 explícito, vira."""
+    row = {"confidence": 0.95, "price_field": "vendas PSA 10 (n=?)", "ref_source": "pricecharting-sales",
            "listing_type": "PSA 10", "tcg_reference": 99.99}
     status, reasons = classify_row(row)
-    assert status == "OK" and "sem-vendas-recentes" not in reasons
-    row["ref_n_sales"] = 0
-    assert classify_row(row) == ("MATCH_REVIEW", ["sem-vendas-recentes"])
+    assert status == "OK" and not any(r.startswith("vendas<3") for r in reasons)
+    row["ref_n_sales"] = 2
+    assert classify_row(row) == ("MATCH_REVIEW", ["vendas<3(n=2)"])

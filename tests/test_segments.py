@@ -21,6 +21,9 @@ GROUPS = [
 def test_assign_era():
     s = Settings()
     assert assign_era(1999, s) == "vintage"
+    # Operador 2026-09-02: só WotC (≤2003) é "vintage" (NM/EX-NM); 2004+ = NM.
+    assert assign_era(2003, s) == "vintage"
+    assert assign_era(2004, s) == "middle"
     assert assign_era(2011, s) == "middle"
     assert assign_era(2021, s) == "recent"
     assert assign_era(None, s) == "unknown"

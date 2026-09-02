@@ -37,3 +37,15 @@ def test_browse_url_graded_facet_and_no_band():
     slab = build_browse_url(s, era_path="1999/Pokemon_Base_Set_-_Base", graded=True)
     assert ",aUngraded," in raw and ",gEX-NM," in raw
     assert ",aGraded," in slab and ",gEX-NM," not in slab
+
+
+def test_graded_base_set_page_slabs_against_new_allowlist():
+    """Allowlist 2026-09-02: PSA 8 e CGC 9 (presentes na captura Base) entram; PSA 7,
+    SGC 8.5 e MNT 8.5 continuam fora. A allowlist NÃO filtra o parse — só o pipeline."""
+    from comc_scanner.grading import DEFAULT_GRADED_ALLOW
+
+    keys = Counter(x.grade for x in parse_html_file(FIX / "comc_graded_base_capture.html"))
+    assert keys["PSA 8"] >= 1 and keys["CGC 9"] >= 1 and keys["PSA 9"] >= 1
+    assert {"PSA 8", "CGC 9", "PSA 9"} <= DEFAULT_GRADED_ALLOW
+    assert keys["PSA 7"] >= 1 and keys["SGC 8.5"] >= 1 and keys["MNT 8.5"] >= 1
+    assert not {"PSA 7", "SGC 8.5", "MNT 8.5"} & DEFAULT_GRADED_ALLOW

@@ -5,7 +5,9 @@ Fluxo por set (catálogo ``comc_set_slugs.json``, agrupado em ``groups.py``):
     COMC set-path browse (2 passadas: cartas soltas ``aUngraded`` + slabs ``aGraded``)
     → funil ``process_listing`` (tipo/condição NM/idioma EN/piso US$/Pokémon icônico)
     → ``matcher.match`` (identifica a carta no TCGplayer; confiança 0-1)
-    → referência: raw = TCGplayer market (tcgcsv/TCGdex); slab = PriceCharting por nota
+    → referência: raw NM/EX-NM = TCGplayer market (tcgcsv/TCGdex); raw LP = mediana de
+      vendas LP (PriceCharting, ≥3, nunca vs NM); slab = mediana de vendas concluídas da
+      MESMA certificadora+nota+variante (PriceCharting; coluna/nota vizinha nunca é referência)
     → desconto ≥ ``MIN_DISCOUNT_PERCENT`` → status OK / MATCH_REVIEW
     → ``BestDeals`` (dedupe) → ``Reporter.flush`` (JSON/CSV + tabela)
 
@@ -30,7 +32,7 @@ from .margin import gross_margin
 from .matcher import match
 from .models import Deal
 from .normalize import normalize_set, set_aliases
-from .pricecharting_client import PcError, graded_reference
+from .pricecharting_client import PcError, graded_reference, raw_condition_reference, variant_tokens
 from .ranking import sort_key
 from .reporter import Reporter, classify_row
 from .segments import TcgSet, select_sets
@@ -289,45 +291,84 @@ class Scanner:
 
     PC_MAX_CONSECUTIVE_ERRORS = 5
 
-    def _slab_reference(self, deal: Deal) -> str:
-        """Troca a referência do slab pelo preço da NOTA no PriceCharting.
+    @staticmethod
+    def _listing_variants(listing) -> frozenset[str]:
+        """Tokens de variante da listagem COMC (reverse, 1st, shadowless, promo…). A venda
+        comparável precisa ter EXATAMENTE o mesmo conjunto — nunca associação aproximada
+        silenciosa entre variantes."""
+        blob = " ".join(p for p in (listing.raw_name, listing.description,
+                                    listing.grade_label, listing.set_hint) if p)
+        return variant_tokens(blob)
 
-        Retorna "ok" | "no_reference" (carta sem página/coluna/vendas suficientes) |
-        "pc_error" (a FONTE falhou: rede/bloqueio/layout — contado à parte, nunca
-        confundido com "sem venda") | "malformed" (nota ilegível). Só "ok" muta o deal;
-        um slab nunca é comparado com preço raw."""
+    def _pc_guarded(self, fn, *args, **kwargs):
+        """Chama a fonte PriceCharting sob o circuit breaker.
+
+        Retorna ("ok", ref) | ("no_reference", None) (a carta não tem vendas comparáveis
+        suficientes — decisão da fonte, não erro) | ("pc_error", None) (a FONTE falhou:
+        rede/bloqueio/layout — contado à parte, nunca confundido com "sem venda")."""
+        if self._pc_down:
+            return "pc_error", None
+        try:
+            ref = fn(*args, **kwargs)
+        except PcError as exc:
+            self._pc_errors += 1
+            log.warning("PriceCharting falhou (%d seguidas): %s", self._pc_errors, exc)
+            if self._pc_errors >= self.PC_MAX_CONSECUTIVE_ERRORS:
+                self._pc_down = True
+                log.error("PriceCharting: %d falhas seguidas — referências de vendas suspensas "
+                          "neste run (slabs e raw LP NÃO são avaliados a partir daqui).",
+                          self._pc_errors)
+            return "pc_error", None
+        self._pc_errors = 0
+        return ("ok", ref) if ref is not None else ("no_reference", None)
+
+    @staticmethod
+    def _apply_sales_ref(deal: Deal, ref, source: str) -> None:
+        """Troca a referência do deal pela mediana de vendas (slab ou LP). Só aqui um
+        deal muda de referência; a comparação final usa exclusivamente esta mediana."""
+        deal.tcg_reference = ref.price
+        deal.price_field_used = ref.label
+        deal.ref_source = source
+        deal.ref_url = ref.url
+        deal.ref_sales_median = ref.price
+        deal.ref_n_sales = ref.n_sales
+        deal.ref_liquidity = ref.liquidity
+        deal.ref_window_days = ref.window_days
+        deal.ref_column_price = ref.column_price
+        deal.margin = gross_margin(ref.price, deal.listing.price)
+
+    def _slab_reference(self, deal: Deal) -> str:
+        """Referência do slab = mediana de vendas concluídas da MESMA carta, variante,
+        certificadora, nota e subcategoria (PriceCharting agrega; coluna exata e bucket
+        genérico NUNCA são referência). Retorna "ok" | "no_reference" | "pc_error" |
+        "malformed"; só "ok" muta o deal. Um slab nunca é comparado com preço raw."""
         grade = _grade_from_key(deal.listing.grade)
         if grade is None:
             log.error("Slab com nota ilegível: %r (%s)", deal.listing.grade, deal.listing.url)
             return "malformed"
-        if self._pc_down:
-            return "pc_error"
-        try:
-            ref = graded_reference(deal.product.name, deal.product.number,
-                                   deal.product.set_name, grade,
-                                   cache_dir=self.settings.pc_cache_dir)
-        except PcError as exc:
-            self._pc_errors += 1
-            log.warning("PriceCharting falhou (%d seguidas) p/ %s [%s]: %s",
-                        self._pc_errors, deal.product.name, grade.key, exc)
-            if self._pc_errors >= self.PC_MAX_CONSECUTIVE_ERRORS:
-                self._pc_down = True
-                log.error("PriceCharting: %d falhas seguidas — passada de slabs suspensa "
-                          "neste run (referências de slab NÃO são confiáveis a partir daqui).",
-                          self._pc_errors)
-            return "pc_error"
-        self._pc_errors = 0
-        if ref is None:
-            return "no_reference"
-        deal.tcg_reference = ref.price
-        deal.price_field_used = ref.grade_key
-        deal.ref_source = {"column": "pricecharting", "sales": "pricecharting-sales",
-                           "proxy": "pricecharting-proxy"}[ref.method]
-        deal.ref_url = ref.url
-        deal.ref_sales_median = ref.sales_median
-        deal.ref_n_sales = ref.n_sales
-        deal.margin = gross_margin(ref.price, deal.listing.price)
-        return "ok"
+        outcome, ref = self._pc_guarded(
+            graded_reference, deal.product.name, deal.product.number, deal.product.set_name,
+            grade, cache_dir=self.settings.pc_cache_dir,
+            variants=self._listing_variants(deal.listing))
+        if outcome == "ok":
+            self._apply_sales_ref(deal, ref, "pricecharting-sales")
+        return outcome
+
+    def _lp_reference(self, deal: Deal) -> str:
+        """Referência de carta solta LP = mediana de ≥3 vendas explicitamente LP/Lightly
+        Played da mesma carta e variante (nunca o preço NM). "ok" | "no_reference" |
+        "pc_error"."""
+        outcome, ref = self._pc_guarded(
+            raw_condition_reference, deal.product.name, deal.product.number,
+            deal.product.set_name, "LP", cache_dir=self.settings.pc_cache_dir,
+            variants=self._listing_variants(deal.listing))
+        if outcome == "ok":
+            self._apply_sales_ref(deal, ref, "pricecharting-sales-lp")
+        return outcome
+
+    def _is_lp(self, listing) -> bool:
+        return self.settings.lp_with_reference and \
+            (listing.condition or "").strip().lower() == "lp"
 
     def process_listing(self, listing, index: TcgIndex, ctx: str | None, kind: str,
                         stats: FunnelStats | None = None, era: str = "") -> Deal | None:
@@ -336,13 +377,19 @@ class Scanner:
         s = self.settings
         st = stats if stats is not None else self.stats
         st.bump("seen")
+        lp_candidate = False
         if kind == KIND_RAW:
             if listing.graded:
                 st.bump("skip_graded_in_raw")
                 return None
             if not self._condition_ok(listing, era):
-                st.bump("skip_condition")
-                return None
+                # LP só segue no funil para buscar a SUA referência (vendas LP); nunca
+                # é comparada com o preço NM.
+                if self._is_lp(listing):
+                    lp_candidate = True
+                else:
+                    st.bump("skip_condition")
+                    return None
         else:
             if not listing.graded:
                 st.bump("skip_raw_in_slab")
@@ -384,6 +431,18 @@ class Scanner:
             if outcome != "ok":
                 st.bump({"no_reference": "slab_no_reference", "pc_error": "slab_pc_error",
                          "malformed": "slab_grade_malformed"}[outcome])
+                return None
+        elif lp_candidate:
+            # Pré-filtro SEGURO (operador): a referência NM do TCGplayer é só um TETO —
+            # LP vale menos que NM, então `preço > NM × (1 − desconto mín.)` já elimina
+            # sem consultar a fonte. A comparação final usa SÓ a referência LP.
+            cap = deal.tcg_reference * (1.0 - s.min_gross_margin)
+            if deal.tcg_reference <= 0 or deal.listing.price > cap:
+                st.bump("lp_prefilter")
+                return None
+            outcome = self._lp_reference(deal)
+            if outcome != "ok":
+                st.bump({"no_reference": "lp_no_reference", "pc_error": "lp_pc_error"}[outcome])
                 return None
         if deal.margin < s.min_gross_margin:
             st.bump("below_discount")

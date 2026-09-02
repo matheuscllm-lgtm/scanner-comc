@@ -8,6 +8,24 @@ from .ranking import UNRANKED, compute_metrics
 STATUS_OK = "OK"
 STATUS_REVIEW = "MATCH_REVIEW"
 
+# Chave da nota (como gravada em ComcListing.grade) → rótulo de entrega.
+_GRADE_QUALIFIER_LABELS = (
+    ("BGS 10 BLACK", "BGS 10 Black Label"),
+    ("CGC 10 PRISTINE", "CGC 10 Pristine"),
+    ("CGC 10 GEM", "CGC 10 Gem Mint"),
+)
+
+
+def grade_label(grade_key: str) -> str:
+    """Rótulo legível da chave da nota: "BGS 10 BLACK" → "BGS 10 Black Label",
+    "CGC 10 PRISTINE" → "CGC 10 Pristine", "CGC 10 GEM" → "CGC 10 Gem Mint";
+    demais chaves ("PSA 10", "TAG 9.5", "BGS 10") ficam como estão."""
+    key = (grade_key or "").strip()
+    for raw, label in _GRADE_QUALIFIER_LABELS:
+        if key.upper() == raw:
+            return label
+    return key
+
 
 @dataclass(slots=True)
 class TcgProduct:
@@ -65,8 +83,8 @@ class Deal:
     listing: ComcListing
     product: TcgProduct
     price: TcgPrice
-    tcg_reference: float          # preço de referência usado (raw: TCGplayer; slab: PriceCharting)
-    price_field_used: str         # raw: market/mid/low; slab: coluna do PC (ex. "PSA 10")
+    tcg_reference: float          # preço de referência usado (raw NM: TCGplayer; slab/LP: mediana PC)
+    price_field_used: str         # raw NM: market/mid/low; slab/LP: label da SalesRef ("vendas PSA 9 (n=5, …)")
     sub_type_used: str
     margin: float                 # desconto como fração: (ref − comc)/ref
     match_confidence: float
@@ -74,18 +92,26 @@ class Deal:
     era: str = ""
     pokemon: str = ""             # Pokémon icônico casado (lista do operador)
     pokemon_rank: int = UNRANKED
-    ref_source: str = "tcgplayer"  # "tcgplayer" | "pricecharting" | "pricecharting-proxy"
+    # "tcgplayer" (raw NM/EX-NM) | "pricecharting-sales" (slab: mediana de vendas da
+    # mesma certificadora+nota+variante) | "pricecharting-sales-lp" (raw LP: mediana de
+    # vendas LP). Valores antigos ("pricecharting" = coluna, "pricecharting-proxy") só
+    # aparecem em JSON gravado antes da PR A — a entrega os lê e marca como antigos.
+    ref_source: str = "tcgplayer"
     ref_url: str = ""             # página onde conferir o preço de referência
-    ref_sales_median: float | None = None  # slab: mediana das vendas da mesma nota (sanidade)
-    ref_n_sales: int = 0          # slab: nº de vendas comparáveis recentes
+    ref_sales_median: float | None = None  # mediana das vendas comparáveis (= ref, slabs/LP)
+    ref_n_sales: int = 0          # nº de vendas comparáveis na janela usada
+    ref_liquidity: str = ""       # "ok" (≥3 em 180d) | "low" (≥3 só em 365d) | "thin" (1–2)
+    ref_window_days: int = 0      # janela da referência: 180 | 365 (0 = não se aplica)
+    ref_column_price: float | None = None  # coluna exata do PC (só informativa/sanidade)
     status: str = STATUS_OK       # OK | MATCH_REVIEW (match/preço não confiável o bastante)
     review_reasons: tuple[str, ...] = ()
 
     @property
     def listing_type(self) -> str:
-        """'Raw NM' ou a nota do slab ('PSA 10', 'CGC 10 Pristine')."""
+        """'Raw NM' / 'Raw EX-NM' / 'Raw LP' ou o rótulo da nota do slab
+        ('PSA 10', 'CGC 10 Pristine', 'CGC 10 Gem Mint', 'BGS 10 Black Label')."""
         if self.listing.graded and self.listing.grade:
-            return self.listing.grade.replace("PRISTINE", "Pristine").replace("GEM", "Gem Mint")
+            return grade_label(self.listing.grade)
         return f"Raw {self.listing.condition or ''}".strip()
 
     def as_row(self) -> dict[str, object]:
@@ -96,7 +122,7 @@ class Deal:
             "roi_pct": m.roi_pct,
             "comc_price": round(self.listing.price, 2),
             "tcg_reference": round(self.tcg_reference, 2),
-            "profit_abs": m.profit_abs,
+            "spread_abs": m.spread_abs,
             "pokemon": self.pokemon,
             "pokemon_rank": self.pokemon_rank,
             "card": self.product.name,
@@ -116,6 +142,9 @@ class Deal:
             "ref_source": self.ref_source,
             "ref_sales_median": self.ref_sales_median,
             "ref_n_sales": self.ref_n_sales,
+            "ref_liquidity": self.ref_liquidity,
+            "ref_window_days": self.ref_window_days,
+            "ref_column_price": self.ref_column_price,
             "era": self.era,
             "confidence": round(self.match_confidence, 2),
             "match_reason": self.match_reason,
