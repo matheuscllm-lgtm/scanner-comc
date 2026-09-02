@@ -68,10 +68,12 @@
   },
   "Neo Revelation": {
     "year": "2001",
-    "slug": "Pokemon_-_Neo_Revelation_-_Base",
+    "slug": "Pokemon_Neo_Revelation_-_Base",
     "comc_count": 88,
     "validated": true,
-    "note": "COMC names this set 'Pokemon - Neo Revelation' (extra leading dash), so slug differs from the other Neo sets."
+    "note": "2026-09-02: COMC renomeou o path — o slug antigo 'Pokemon_-_Neo_Revelation_-_Base' virou um caminho-pai (Base + 1st Edition + alemão) com paginação SEM FIM (55k listagens num set de 88, run do grupo 4 morto). Novo slug = só o set Base (91 ungraded na pág. 1).",
+    "validated_at": "2026-09-02",
+    "page1_listings": 91
   },
   "Neo Destiny": {
     "year": "2002",
