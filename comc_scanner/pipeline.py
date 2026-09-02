@@ -66,14 +66,21 @@ class BestDeals:
             f"{deal.listing.raw_name}:{round(deal.listing.price, 2)}"
         return (deal.product.product_id, deal.listing_type, ident)
 
-    def add(self, deal: Deal, gate: float, threshold: float) -> None:
+    def add(self, deal: Deal, gate: float, threshold: float) -> bool:
+        """True = listagem NOVA; False = duplicata (mesma listagem vista de novo, ex.
+        paginação com empate de preço) — o chamador conta em `dedup_dropped` para o
+        funil bater com a tabela."""
         if deal.margin < threshold:
-            return
+            return False
         bucket = self.best if deal.match_confidence >= gate else self.low
         key = self._key(deal)
         cur = bucket.get(key)
-        if cur is None or deal.margin > cur.margin:
+        if cur is None:
             bucket[key] = deal
+            return True
+        if deal.margin > cur.margin:
+            bucket[key] = deal
+        return False
 
     @staticmethod
     def _ranked(deals: list[Deal]) -> list[Deal]:
@@ -460,7 +467,8 @@ class Scanner:
                                         continue
                                     if deal:
                                         deal.era = ts.era
-                                        best.add(deal, gate, thr)
+                                        if not best.add(deal, gate, thr):
+                                            self.stats.bump("dedup_dropped")
                                 if time.time() >= next_flush:
                                     self.reporter.flush(best.qualifying(), label,
                                                         best.low_conf(), stats=self.stats)

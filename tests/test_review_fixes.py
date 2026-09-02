@@ -145,7 +145,8 @@ def test_pc_error_counter_resets_after_success(index, monkeypatch):
         calls["n"] += 1
         if calls["n"] % 2:
             raise PcError("timeout")
-        return GradedRef(price=200.0, grade_key="PSA 10", url="https://pc/x", method="column")
+        return GradedRef(price=200.0, grade_key="PSA 10", url="https://pc/x", method="column",
+                         n_sales=3, sales_median=190.0)
 
     monkeypatch.setattr(pl, "graded_reference", flaky)
     sc = pl.Scanner(_settings())
@@ -173,3 +174,15 @@ def test_classify_row_flags_slab_with_raw_reference_and_funnel_keeps_unknown_key
     lines = funnel_lines({"seen": 3, "listing_errors": 2, "novo_contador": 7})
     assert "Listagens com erro interno (puladas): 2" in lines
     assert lines[-1] == "outros: novo_contador=7"
+
+
+def test_exact_column_without_recent_sales_is_match_review(index, monkeypatch):
+    """Coluna exata (ex. CGC 10 Pristine) mas ZERO vendas recentes dessa nota: preço de
+    tabela sem liquidez que o sustente → MATCH_REVIEW · sem-vendas-recentes (caso real
+    Luxray ex, grupo 1, 2026-09-02)."""
+    monkeypatch.setattr(pl, "graded_reference",
+                        lambda *a, **k: GradedRef(price=99.99, grade_key="CGC 10 PRISTINE",
+                                                  url="https://pc/x", method="column", n_sales=0))
+    sc = pl.Scanner(_settings())
+    d = sc.process_listing(_slab(69.25, "CGC 10 PRISTINE", "CGC"), index, CTX, pl.KIND_SLAB)
+    assert d is not None and d.status == "MATCH_REVIEW" and "sem-vendas-recentes" in d.review_reasons

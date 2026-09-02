@@ -113,7 +113,7 @@ def test_slab_uses_pricecharting_grade_price(index, monkeypatch):
 
     def fake_ref(name, number, set_label, grade, cache_dir=None):
         calls.append((name, number, set_label, grade.key))
-        return GradedRef(price=125.65, grade_key=grade.key,
+        return GradedRef(price=125.65, grade_key=grade.key, n_sales=4, sales_median=120.0,
                          url="https://www.pricecharting.com/game/pokemon-scarlet-&-violet-151/charizard-ex-6")
 
     monkeypatch.setattr(pl, "graded_reference", fake_ref)
@@ -159,3 +159,5 @@ def test_best_deals_dedupes_same_listing_and_ranks(index):
     q = best.qualifying()
     assert len(q) == 2
     assert q[0].listing.price == 60.0  # maior ROI primeiro
+    # add() devolve False na duplicata -> o pipeline conta `dedup_dropped` (funil = tabela)
+    assert best.add(sc.process_listing(L, index, CTX, pl.KIND_RAW), gate=0.80, threshold=0.20) is False

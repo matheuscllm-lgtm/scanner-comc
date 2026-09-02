@@ -83,7 +83,9 @@ def test_status_ok_vs_match_review_reasons():
 def test_classify_row_is_the_single_source_of_truth():
     assert classify_row({"confidence": 0.95, "price_field": "market"}) == ("OK", [])
     assert classify_row({"confidence": 0.95, "price_field": "PSA 10",
-                         "ref_source": "pricecharting"}) == ("OK", [])
+                         "ref_source": "pricecharting", "ref_n_sales": 3}) == ("OK", [])
+    assert classify_row({"confidence": 0.95, "price_field": "PSA 10",
+                         "ref_source": "pricecharting", "ref_n_sales": 0})[1] == ["sem-vendas-recentes"]
     assert classify_row({"confidence": 0.8, "price_field": "mid"})[1] == ["confiança<0.90", "preço:mid"]
 
 

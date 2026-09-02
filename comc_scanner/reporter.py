@@ -59,7 +59,7 @@ FUNNEL_LABELS = [
     ("skip_raw_in_slab", "Ignoradas: solta na passada de slabs"),
     ("skip_grade_unparsed", "Ignoradas: nota do slab não reconhecida"),
     ("skip_grade_out_of_scope", "Ignoradas: nota fora do escopo"),
-    ("skip_condition", "Ignoradas: condição ≠ NM"),
+    ("skip_condition", "Ignoradas: condição fora do permitido (moderno NM; WotC NM/EX-NM)"),
     ("skip_language", "Ignoradas: idioma ≠ inglês"),
     ("skip_price_floor", "Ignoradas: abaixo do piso US$"),
     ("skip_price_ceiling", "Ignoradas: acima do teto US$ (--max-price)"),
@@ -70,9 +70,10 @@ FUNNEL_LABELS = [
     ("slab_pc_error", "Slabs com ERRO na fonte PriceCharting (rede/bloqueio/layout)"),
     ("slab_grade_malformed", "Slabs com nota ilegível"),
     ("below_discount", "Descartadas: desconto abaixo do mínimo"),
-    ("ok", "Oportunidades OK"),
-    ("review", "Revisão manual (MATCH_REVIEW)"),
-    ("low_confidence", "Balde low-confidence"),
+    ("ok", "Aprovadas OK (antes da dedupe)"),
+    ("review", "Aprovadas MATCH_REVIEW (antes da dedupe)"),
+    ("low_confidence", "Balde low-confidence (antes da dedupe)"),
+    ("dedup_dropped", "Duplicadas removidas (mesma listagem vista mais de uma vez)"),
     ("listing_errors", "Listagens com erro interno (puladas)"),
     ("comc_errors", "Sets bloqueados na COMC"),
     ("comc_partial_sets", "Sets/passadas truncados (bloqueio no meio)"),
@@ -115,12 +116,16 @@ def classify_row(row: dict, trust: float = TRUST_CONFIDENCE) -> tuple[str, list[
     if source == "pricecharting-proxy":
         reasons.append(f"ref~proxy:{field}")
     if source == "pricecharting":
-        # Sanidade: coluna exata muito longe da mediana das vendas recentes da mesma nota.
+        # Sanidade da coluna exata: (a) sem NENHUMA venda recente da mesma nota, o preço
+        # de tabela não tem liquidez que o sustente → revisar; (b) coluna >30% longe da
+        # mediana das vendas recentes → revisar.
         try:
             col = float(row.get("tcg_reference") or 0.0)
             med = row.get("ref_sales_median")
             n = int(row.get("ref_n_sales") or 0)
-            if med is not None and col > 0 and n >= 3 and abs(col - float(med)) / col > 0.30:
+            if n == 0:
+                reasons.append("sem-vendas-recentes")
+            elif med is not None and col > 0 and n >= 3 and abs(col - float(med)) / col > 0.30:
                 reasons.append(f"ref÷vendas(n={n}:{float(med):.2f})")
         except (TypeError, ValueError):
             pass
