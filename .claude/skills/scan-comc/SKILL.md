@@ -14,8 +14,10 @@ description: >-
 O catálogo validado (sets `validated: true` de `comc_scanner/comc_set_slugs.json`)
 está dividido em **4 grupos** — fonte canônica `comc_scanner/groups.py`
 (`python -m comc_scanner list-groups` lista sem rede). Cada set é varrido em
-**duas passadas**: cartas soltas (moderno só NM; WotC NM ou EX-NM) e slabs (só PSA 10/9, BGS 10/9.5,
-TAG 10/9.5, CGC 10 Pristine). Só cartas de Pokémon da lista
+**duas passadas**: cartas soltas (WotC ≤2003 NM ou EX-NM; 2004+ só NM; LP só com
+referência LP = mediana de ≥3 vendas "LP") e slabs (PSA 8-10, CGC 9-10 Gem/Pristine,
+BGS 9-10/Black Label, SGC 9-10, TAG 9.5/10 — referência = mediana de vendas da MESMA
+certificadora+nota+variante; coluna do PriceCharting nunca é referência). Só cartas de Pokémon da lista
 `comc_scanner/iconic_pokemon.csv` (top-100 do operador) entram; desconto mínimo
 **20%** (`(ref − COMC)/ref`); piso US$10.
 
@@ -78,9 +80,12 @@ python comc_summary.py results/comc_deals_grupo<N>_latest.json -o results/comc-g
    DOIS links: `[oferta]` (COMC) · `[referência]` (TCGplayer para raw; PriceCharting
    para slab), lidos do JSON — nunca inventados.
 2. TODOS os baldes aparecem: 🟢 OK e ⚠️ MATCH_REVIEW (confiança <0.90, preço
-   mid/low, ou slab só com bucket genérico "Grade 9.5" — triagem, sem vendas
-   comparáveis suficientes) — nenhuma linha escondida. Ordem = ranking
-   (ROI → desconto % → lucro US$ → popularidade do Pokémon).
+   mid/low, `vendas<3` = só 1–2 vendas comparáveis, `coluna÷vendas`) — nenhuma linha
+   escondida; `baixa-liquidez(365d)` é nota, não muda status. Ordem = ranking
+   (ROI bruto → desconto % → spread US$ → popularidade do Pokémon). Nunca "lucro".
+   **Diagnóstico** (pedido do operador): `scan --group all --min-price 5 --min-discount 10`
+   e depois `comc_summary.py … --sensitivity 10,15,20`: faixas 10–14,99% e 15–19,99%
+   são diagnóstico, NÃO oportunidade; ≥20% = candidato comercial.
 3. O cabeçalho traz o **funil** (analisadas / ignoradas por motivo / OK / revisão)
    — vai junto sempre.
 4. A única moldura fora do verbatim: uma linha de contexto antes ("Grupo N, data")

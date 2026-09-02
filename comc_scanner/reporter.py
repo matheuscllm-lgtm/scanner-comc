@@ -5,14 +5,25 @@ A tabela canônica de entrega (modelo MYP, cross-scanner) tem UMA fonte: as fun�
 entrega) só reparte as linhas em baldes e reusa estas funções — nunca montar
 tabela à mão.
 
-Colunas: # | Desconto% | ROI% | COMC$ | Ref$ | Lucro$ | Pokémon | Carta | Set |
+Colunas: # | Desconto% | ROI bruto% | COMC$ | Ref$ | Spread$ | Pokémon | Carta | Set |
 Tipo | Ref | Conf | Status | Links
+- `Desconto%` = (ref − COMC)/ref; `Spread$` = ref − COMC (bruto, sem taxas);
+  `ROI bruto%` = spread/COMC (nomenclatura do operador, 2026-09-02);
 - `Carta` = nome + número de coleção ("Pikachu 173/165");
-- `Tipo` = "Raw NM" ou a nota do slab ("PSA 10", "CGC 10 Pristine");
+- `Tipo` = "Raw NM" / "Raw EX-NM" / "Raw LP" ou o rótulo da nota do slab ("PSA 10",
+  "CGC 10 Pristine", "BGS 10 Black Label");
 - `Ref` = de onde veio o preço de referência: "TCG market|mid|low" (TCGplayer via
-  tcgcsv) ou "PC PSA 10" (PriceCharting por nota; "~" = proxy de nota vizinha);
-- `Status` = OK ou MATCH_REVIEW + motivos (confiança <0.90, preço mid/low, proxy);
+  tcgcsv, raw NM) ou "PC vendas <nota|LP> (n=…, mês..mês)" (PriceCharting: mediana
+  de vendas concluídas da mesma carta, variante, certificadora e nota — ou LP);
+  JSON antigo: "PC coluna <nota> (antigo)";
+- `Status` = OK ou MATCH_REVIEW + motivos (confiança < trust, slab×ref-raw,
+  preço mid/low, vendas<3, coluna÷vendas, formato antigo) + notas que NÃO mudam
+  o status (`baixa-liquidez(365d)`);
 - `Links` = "[oferta](url COMC) · [referência](url onde conferir o preço)".
+
+Compatibilidade de leitura: JSONs gravados antes da PR A trazem `profit_abs` (usado
+como spread) e `ref_source` "pricecharting"/"pricecharting-proxy" (marcados como
+antigos, nunca OK).
 """
 from __future__ import annotations
 
@@ -33,14 +44,23 @@ log = logging.getLogger("comc_scanner.reporter")
 TRUST_CONFIDENCE = 0.90
 # TCGplayer reference chain market -> mid -> low ("market" = real observed sale).
 TRUSTED_PRICE_FIELD = "market"
+# Mínimo de vendas comparáveis para a mediana valer como referência OK (1–2 = "thin").
+MIN_COMPARABLE_SALES = 3
+# Coluna exata do PriceCharting (informativa) mais longe que isto da mediana de vendas
+# → sanidade falhou → revisar.
+COLUMN_DEVIATION_MAX = 0.30
+
+_SALES_SOURCE_PREFIX = "pricecharting-sales"   # "pricecharting-sales" | "pricecharting-sales-lp"
+_LEGACY_COLUMN_SOURCE = "pricecharting"        # JSON antigo: coluna do PC como referência
+_LEGACY_PROXY_SOURCE = "pricecharting-proxy"   # JSON antigo: bucket genérico / nota vizinha
 
 _TABLE_COLS = [
     ("rank", "#"),
     ("margin_pct", "Desconto%"),
-    ("roi_pct", "ROI%"),
+    ("roi_pct", "ROI bruto%"),
     ("comc_price", "COMC$"),
     ("tcg_reference", "Ref$"),
-    ("profit_abs", "Lucro$"),
+    ("spread_abs", "Spread$"),
     ("pokemon", "Pokémon"),
     ("card_number", "Carta"),
     ("set", "Set"),
@@ -50,25 +70,31 @@ _TABLE_COLS = [
     ("status", "Status"),
     ("links", "Links"),
 ]
-_MAXW = {"card_number": 34, "set": 26, "listing_type": 16, "pokemon": 14}
+_MAXW = {"card_number": 34, "set": 26, "listing_type": 20, "pokemon": 14}
 
 # Rótulos do funil (spec §13) — usados no log final e no cabeçalho da entrega.
+# Ordem = ordem lógica do funil (triagem → match → referência → limiar → baldes).
 FUNNEL_LABELS = [
     ("seen", "Listagens analisadas"),
     ("skip_graded_in_raw", "Ignoradas: gradada na passada raw"),
     ("skip_raw_in_slab", "Ignoradas: solta na passada de slabs"),
     ("skip_grade_unparsed", "Ignoradas: nota do slab não reconhecida"),
     ("skip_grade_out_of_scope", "Ignoradas: nota fora do escopo"),
-    ("skip_condition", "Ignoradas: condição fora do permitido (moderno NM; WotC NM/EX-NM)"),
+    ("skip_condition", "Ignoradas: condição fora do permitido (WotC ≤2003 NM/EX-NM; "
+                       "2004+ NM; LP só com referência LP)"),
     ("skip_language", "Ignoradas: idioma ≠ inglês"),
     ("skip_price_floor", "Ignoradas: abaixo do piso US$"),
     ("skip_price_ceiling", "Ignoradas: acima do teto US$ (--max-price)"),
     ("skip_not_iconic", "Ignoradas: Pokémon fora da lista"),
     ("match_failed", "Matches rejeitados (carta não identificada)"),
     ("skip_rarity", "Ignoradas: raridade (chase-only)"),
-    ("slab_no_reference", "Slabs sem referência PriceCharting (sem página/coluna/vendas)"),
+    ("slab_no_reference", "Slabs sem vendas comparáveis (mesma certificadora+nota+variante) "
+                          "— sem referência"),
     ("slab_pc_error", "Slabs com ERRO na fonte PriceCharting (rede/bloqueio/layout)"),
     ("slab_grade_malformed", "Slabs com nota ilegível"),
+    ("lp_prefilter", "Raw LP acima do pré-filtro (COMC > ref NM × (1 − desconto mín.))"),
+    ("lp_no_reference", "Raw LP sem ≥3 vendas LP comparáveis — sem referência"),
+    ("lp_pc_error", "Raw LP com ERRO na fonte PriceCharting"),
     ("below_discount", "Descartadas: desconto abaixo do mínimo"),
     ("ok", "Aprovadas OK (antes da dedupe)"),
     ("review", "Aprovadas MATCH_REVIEW (antes da dedupe)"),
@@ -96,9 +122,37 @@ def funnel_lines(counts: dict) -> list[str]:
     return out
 
 
+def _price_field(row: dict) -> str:
+    return "" if row.get("price_field") is None else str(row.get("price_field")).strip()
+
+
+def _source(row: dict) -> str:
+    return str(row.get("ref_source") or "tcgplayer")
+
+
+def _float_or_none(value: object) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def classify_row(row: dict, trust: float = TRUST_CONFIDENCE) -> tuple[str, list[str]]:
-    """(status, motivos) de uma linha. OK só quando: confiança ≥ trust E referência
-    é preço 'market' real (raw) ou coluna exata da nota (slab, sem proxy)."""
+    """(status, motivos) de uma linha. OK só quando: confiança ≥ trust E a referência é
+    (raw NM) preço 'market' real do TCGplayer, ou (slab/LP) mediana de ≥3 vendas
+    comparáveis cuja coluna informativa (se houver) não destoa >30%.
+
+    Motivos de MATCH_REVIEW:
+    - `confiança<x`      — match carta↔referência abaixo do limiar do run;
+    - `slab×ref-raw`     — slab com referência de carta solta (nunca OK);
+    - `preço:mid|low`    — TCGplayer sem preço market (fallback, não é venda real);
+    - `vendas<3(n=…)`    — mediana com 1–2 vendas ("thin"); n ausente = desconhecido, não flaga;
+    - `coluna÷vendas(c)` — coluna exata do PC >30% longe da mediana de vendas;
+    - `ref~proxy` / `ref=coluna(antigo)` — JSON gravado antes da PR A (formato antigo).
+    Baixa liquidez (≥3 vendas só em 365 dias) NÃO entra aqui — é nota (`row_notes`).
+    """
     reasons: list[str] = []
     try:
         conf = float(row.get("confidence") or 0.0)
@@ -106,43 +160,59 @@ def classify_row(row: dict, trust: float = TRUST_CONFIDENCE) -> tuple[str, list[
         conf = 0.0
     if conf < trust:
         reasons.append(f"confiança<{trust:.2f}")
-    source = str(row.get("ref_source") or "tcgplayer")
-    field = "" if row.get("price_field") is None else str(row.get("price_field")).strip()
+    source = _source(row)
+    field = _price_field(row)
     listing_type = str(row.get("listing_type") or "")
     if source == "tcgplayer" and listing_type and not listing_type.startswith("Raw"):
         reasons.append("slab×ref-raw")  # slab com referência de carta solta: nunca OK
     if source == "tcgplayer" and field and field != TRUSTED_PRICE_FIELD:
         reasons.append(f"preço:{field}")
-    if source == "pricecharting-proxy":
-        reasons.append(f"ref~proxy:{field}")
-    if source == "pricecharting":
-        # Sanidade da coluna exata: (a) sem NENHUMA venda recente da mesma nota, o preço
-        # de tabela não tem liquidez que o sustente → revisar; (b) coluna >30% longe da
-        # mediana das vendas recentes → revisar.
-        try:
-            col = float(row.get("tcg_reference") or 0.0)
-            med = row.get("ref_sales_median")
-            raw_n = row.get("ref_n_sales")
-            n = -1 if raw_n is None else int(raw_n)  # ausente = desconhecido, não zero
-            if n == 0:
-                reasons.append("sem-vendas-recentes")
-            elif med is not None and col > 0 and n >= 3 and abs(col - float(med)) / col > 0.30:
-                reasons.append(f"ref÷vendas(n={n}:{float(med):.2f})")
-        except (TypeError, ValueError):
-            pass
+    if source.startswith(_SALES_SOURCE_PREFIX):
+        raw_n = row.get("ref_n_sales")
+        if raw_n is not None:  # ausente = desconhecido (JSON antigo), não zero
+            try:
+                n = int(raw_n)
+            except (TypeError, ValueError):
+                n = None
+            if n is not None and n < MIN_COMPARABLE_SALES:
+                reasons.append(f"vendas<{MIN_COMPARABLE_SALES}(n={n})")
+    col = _float_or_none(row.get("ref_column_price"))
+    ref = _float_or_none(row.get("tcg_reference")) or 0.0
+    if col is not None and ref > 0 and abs(col - ref) / ref > COLUMN_DEVIATION_MAX:
+        reasons.append(f"coluna÷vendas({col:.2f})")
+    if source == _LEGACY_PROXY_SOURCE:
+        reasons.append("ref~proxy")
+    elif source == _LEGACY_COLUMN_SOURCE:
+        reasons.append("ref=coluna(antigo)")
     return (STATUS_REVIEW if reasons else STATUS_OK), reasons
+
+
+def row_notes(row: dict) -> list[str]:
+    """Notas informativas que NÃO mudam o status: `baixa-liquidez(365d)` quando a
+    referência só juntou ≥3 vendas na janela de 365 dias (`ref_liquidity == "low"`)."""
+    notes: list[str] = []
+    if str(row.get("ref_liquidity") or "") == "low":
+        notes.append("baixa-liquidez(365d)")
+    return notes
 
 
 def _status_cell(row: dict, trust: float = TRUST_CONFIDENCE) -> str:
     status, reasons = classify_row(row, trust=trust)
-    return " · ".join([status, *reasons])
+    return " · ".join([status, *reasons, *row_notes(row)])
 
 
 def _ref_label(row: dict) -> str:
-    field = "" if row.get("price_field") is None else str(row.get("price_field")).strip()
-    source = str(row.get("ref_source") or "tcgplayer")
-    if source.startswith("pricecharting"):
-        return f"PC {field}" + ("~" if source.endswith("proxy") else "")  # "PC vendas BGS 9.5 (n=5)"
+    """Coluna `Ref`: "PC vendas PSA 9 (n=5, 2026-03..2026-08)" / "PC vendas LP (n=4, …)"
+    (mediana de vendas), "TCG market|mid|low" (TCGplayer) ou, em JSON antigo,
+    "PC coluna PSA 10 (antigo)" / "PC GRADE 9.5~ (antigo)"."""
+    field = _price_field(row)
+    source = _source(row)
+    if source.startswith(_SALES_SOURCE_PREFIX):
+        return f"PC {field}".strip()
+    if source == _LEGACY_PROXY_SOURCE:
+        return f"PC {field}~ (antigo)"
+    if source == _LEGACY_COLUMN_SOURCE:
+        return f"PC coluna {field} (antigo)"
     return f"TCG {field}".strip()
 
 
@@ -150,8 +220,9 @@ def _links_cell(row: dict) -> str:
     """Coluna `Links`: "[oferta](comc_url) · [referência](ref_url|tcg_url)".
 
     `oferta` = listagem na COMC; `referência` = página onde conferir o preço usado
-    (TCGplayer para raw; PriceCharting para slab). Lidos do deal, nunca inventados;
-    "—" se nenhum. URLs percent-encodadas (espaço/parênteses quebram o markdown).
+    (TCGplayer para raw NM; PriceCharting para slab/LP). Lidos do deal, nunca
+    inventados; "—" se nenhum. URLs percent-encodadas (espaço/parênteses quebram o
+    markdown).
     """
     from urllib.parse import quote
     parts = []
@@ -184,9 +255,12 @@ def table_header_lines() -> list[str]:
 def render_row_line(row: dict, rank: int, trust: float = TRUST_CONFIDENCE) -> str:
     """One canonical table line from a flat deal row (Deal.as_row() or the same
     dict re-read from the Reporter JSON/CSV). `trust` = the run's TRUST_CONFIDENCE
-    (gravado no JSON) so the delivery never re-classifies with a different bar."""
+    (gravado no JSON) so the delivery never re-classifies with a different bar.
+    JSON antigo (só `profit_abs`): o valor antigo preenche a coluna Spread$."""
     row = dict(row)
     row["rank"] = rank
+    if "spread_abs" not in row and "profit_abs" in row:
+        row["spread_abs"] = row["profit_abs"]
     row["status"] = _status_cell(row, trust)
     row["ref_label"] = _ref_label(row)
     row["links"] = _links_cell(row)
@@ -201,7 +275,8 @@ def render_rows_table(rows: list[dict], trust: float = TRUST_CONFIDENCE) -> str:
 
 def render_markdown(deals: list[Deal], label: str, top_n: int,
                     trust: float = TRUST_CONFIDENCE) -> str:
-    title = f"### COMC deals — {label} — top {min(len(deals), top_n)} (ROI → desconto → lucro)"
+    title = (f"### COMC deals — {label} — top {min(len(deals), top_n)} "
+             "(ROI bruto → desconto → spread)")
     if not deals:
         return title + "\n\n_(nenhum deal acima do limiar ainda)_"
     rows = sort_rows([d.as_row() for d in deals])[:top_n]

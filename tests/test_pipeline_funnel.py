@@ -6,7 +6,7 @@ import pytest
 from comc_scanner import pipeline as pl
 from comc_scanner.config import load_settings
 from comc_scanner.models import ComcListing
-from comc_scanner.pricecharting_client import GradedRef
+from comc_scanner.pricecharting_client import SalesRef
 from comc_scanner.tcg_index import TcgIndex
 
 SET = "SV: Scarlet & Violet 151"
@@ -108,40 +108,47 @@ def test_graded_listing_in_raw_pass_is_skipped(index):
     assert sc.stats["skip_graded_in_raw"] == 1
 
 
-def test_slab_uses_pricecharting_grade_price(index, monkeypatch):
+def _sref(price, n=4, liquidity="ok", window=180, label="vendas PSA 10 (n=4, 2026-05..2026-08)",
+          url="https://www.pricecharting.com/game/pokemon-scarlet-&-violet-151/charizard-ex-6"):
+    return SalesRef(price=price, n_sales=n, window_days=window, liquidity=liquidity,
+                    url=url, label=label)
+
+
+def test_slab_uses_pricecharting_sales_median(index, monkeypatch):
     calls = []
 
-    def fake_ref(name, number, set_label, grade, cache_dir=None):
-        calls.append((name, number, set_label, grade.key))
-        return GradedRef(price=125.65, grade_key=grade.key, n_sales=4, sales_median=120.0,
-                         url="https://www.pricecharting.com/game/pokemon-scarlet-&-violet-151/charizard-ex-6")
+    def fake_ref(name, number, set_label, grade, cache_dir=None, variants=frozenset()):
+        calls.append((name, number, set_label, grade.key, variants))
+        return _sref(125.65)
 
     monkeypatch.setattr(pl, "graded_reference", fake_ref)
     sc = pl.Scanner(_settings())
     d = sc.process_listing(_slab("Charizard ex", "006", 80.0, "PSA 10"), index, CTX, pl.KIND_SLAB)
     assert d is not None and d.status == "OK"
-    assert d.tcg_reference == 125.65 and d.ref_source == "pricecharting"
-    assert d.listing_type == "PSA 10" and d.price_field_used == "PSA 10"
+    assert d.tcg_reference == 125.65 and d.ref_source == "pricecharting-sales"
+    assert d.listing_type == "PSA 10" and d.price_field_used.startswith("vendas PSA 10")
     assert d.ref_url.startswith("https://www.pricecharting.com/")
-    assert calls == [("Charizard ex - 006/165", "006/165", SET, "PSA 10")]
+    assert calls == [("Charizard ex - 006/165", "006/165", SET, "PSA 10", frozenset())]
     row = d.as_row()
     assert row["ref_url"] == d.ref_url and row["tcg_url"].startswith("https://www.tcgplayer.com/")
+    assert row["ref_liquidity"] == "ok" and row["ref_window_days"] == 180
 
 
-def test_slab_out_of_scope_and_proxy_and_no_reference(index, monkeypatch):
+def test_slab_out_of_scope_thin_sales_and_no_reference(index, monkeypatch):
     monkeypatch.setattr(pl, "graded_reference",
-                        lambda *a, **k: GradedRef(price=100.0, grade_key="GRADE 9.5",
-                                                  url="https://pc/x", method="proxy"))
+                        lambda *a, **k: _sref(100.0, n=2, liquidity="thin", window=365,
+                                              label="vendas BGS 9.5 (n=2, 2026-01..2026-06)"))
     sc = pl.Scanner(_settings())
-    assert sc.process_listing(_slab("Charizard ex", "006", 50.0, "CGC 10 GEM", "CGC"),
+    assert sc.process_listing(_slab("Charizard ex", "006", 50.0, "PSA 7"),
                               index, CTX, pl.KIND_SLAB) is None
-    assert sc.process_listing(_slab("Charizard ex", "006", 50.0, "PSA 8"),
+    assert sc.process_listing(_slab("Charizard ex", "006", 50.0, "MNT 10", "MNT"),
                               index, CTX, pl.KIND_SLAB) is None
     assert sc.stats["skip_grade_out_of_scope"] == 2
+    # 1–2 vendas comparáveis: referência = mediana delas, mas SEMPRE MATCH_REVIEW
     d = sc.process_listing(_slab("Charizard ex", "006", 50.0, "BGS 9.5", "BGS"),
                            index, CTX, pl.KIND_SLAB)
-    assert d is not None and d.status == "MATCH_REVIEW" and d.ref_source == "pricecharting-proxy"
-    assert d.price_field_used == "GRADE 9.5"
+    assert d is not None and d.status == "MATCH_REVIEW" and d.ref_source == "pricecharting-sales"
+    assert "vendas<3(n=2)" in d.review_reasons
     monkeypatch.setattr(pl, "graded_reference", lambda *a, **k: None)
     assert sc.process_listing(_slab("Charizard ex", "006", 50.0, "PSA 10"),
                               index, CTX, pl.KIND_SLAB) is None

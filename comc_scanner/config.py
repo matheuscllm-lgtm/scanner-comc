@@ -109,6 +109,9 @@ class Settings:
     # quase todo raw vintage como EX-NM — decisão do operador 2026-09-02).
     comc_condition_allow: tuple[str, ...] = ("nm",)
     comc_condition_allow_vintage: tuple[str, ...] = ("nm", "ex-nm")
+    # Raw LP entra SÓ com referência própria (mediana de ≥3 vendas "LP"/"Lightly Played"
+    # da mesma carta+variante no PriceCharting); nunca comparada com NM. False desliga.
+    lp_with_reference: bool = True
     # English-only: drop listings whose set string names another language.
     comc_exclude_variants: tuple[str, ...] = (
         "japanese", "korean", "german", "spanish", "french", "italian",
@@ -140,7 +143,7 @@ class Settings:
 
     # --- Eras ---
     default_era: str = "all"
-    era_vintage_max_year: int = 2010
+    era_vintage_max_year: int = 2003   # WotC (Base…Skyridge); 2004+ = NM só
     era_middle_max_year: int = 2019
     max_run_seconds: int = 0
     max_pages_per_set: int = 0
@@ -169,6 +172,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         comc_seller_repo=_get("COMC_SELLER_REPO", ""),
         comc_condition_allow=_csv("COMC_CONDITION_ALLOW", "nm"),
         comc_condition_allow_vintage=_csv("COMC_CONDITION_ALLOW_VINTAGE", "nm,ex-nm"),
+        lp_with_reference=_get_bool("LP_WITH_REFERENCE", True),
         comc_exclude_variants=_csv(
             "COMC_EXCLUDE_VARIANTS",
             "japanese,korean,german,spanish,french,italian,chinese,portuguese,thai,indonesian",
@@ -194,7 +198,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         min_match_confidence=_get_float("MIN_MATCH_CONFIDENCE", 0.80),
         trust_confidence=_get_float("TRUST_CONFIDENCE", 0.90),
         default_era=(_get("DEFAULT_ERA", "all") or "all").lower(),
-        era_vintage_max_year=_get_int("ERA_VINTAGE_MAX_YEAR", 2010),
+        era_vintage_max_year=_get_int("ERA_VINTAGE_MAX_YEAR", 2003),
         era_middle_max_year=_get_int("ERA_MIDDLE_MAX_YEAR", 2019),
         max_run_seconds=_get_int("MAX_RUN_SECONDS", 0),
         max_pages_per_set=_get_int("MAX_PAGES_PER_SET", 0),

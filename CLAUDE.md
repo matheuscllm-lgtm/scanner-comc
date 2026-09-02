@@ -37,27 +37,33 @@ Scanner de arbitragem da **COMC** para cartas de Pokémon, num único fluxo:
 COMC (set-path browse, 2 passadas por set: cartas soltas + slabs)
  → só Pokémon da lista icônica (comc_scanner/iconic_pokemon.csv, top-100 do operador)
  → identificar a carta (matcher: set + número + total do set + nome; confiança 0-1)
- → referência de preço:  raw  = TCGplayer market (tcgcsv → fallback TCGdex)
-                         slab = PriceCharting, preço da NOTA (PSA 10, BGS 10, CGC 10 Pristine…)
+ → referência de preço:  raw NM/EX-NM = TCGplayer market (tcgcsv → fallback TCGdex)
+                         raw LP       = mediana de ≥3 vendas "LP" da mesma carta (PriceCharting)
+                         slab         = mediana de vendas da MESMA certificadora+nota+variante
  → desconto = (ref − COMC)/ref ≥ MIN_DISCOUNT_PERCENT (20)
- → status OK / MATCH_REVIEW → ranking (ROI → desconto → lucro → popularidade)
+ → status OK / MATCH_REVIEW → ranking (ROI bruto → desconto → spread → popularidade)
  → results/comc_deals_<escopo>_latest.json → comc_summary.py (tabela modelo MYP)
 ```
 
-- **Raw** = condição por igualdade **por era**: moderno só `NM`; vintage WotC `NM` ou
-  `EX-NM` (a COMC gradua o raw WotC como EX-NM — decisão do operador 2026-09-02).
-- **Slab** = só notas da allowlist `GRADED_ALLOW` (default PSA 10/9, BGS 10/9.5,
-  TAG 10/9.5, **CGC só 10 Pristine**). Um slab NUNCA é comparado com preço de carta
-  solta. Referência do slab, nesta ordem: (1) **coluna exata** da certificadora+nota
-  na página do PriceCharting (só existe na nota 10: PSA 10, BGS 10, **TAG 10**, ACE 10,
-  SGC 10, CGC 10 Pristine) — pode ser `OK`; a mediana das vendas recentes da mesma nota
-  vai junto como sanidade (coluna >30% longe → `MATCH_REVIEW · ref÷vendas`); (2) sem
-  coluna exata (**qualquer nota 9 ou 9.5** — "Grade 9"/"Grade 9.5" do PC são buckets
-  genéricos que misturam certificadoras) → **mediana de ≥3 vendas concluídas dos
-  últimos 180 dias** da mesma certificadora+nota, cujo título cite SÓ essa nota
-  (tabelas de vendas eBay da própria página; `Ref` = `PC vendas PSA 9 (n=…, mês..mês)`)
-  — pode ser `OK`; (3) sem amostra → bucket genérico **só para triagem** (`PC GRADE
-  9.5~`, sempre `MATCH_REVIEW`, nunca oportunidade de compra); (4) nada → descarta.
+- **Raw** = condição por igualdade **por era**: WotC (≤2003, `ERA_VINTAGE_MAX_YEAR`)
+  `NM` ou `EX-NM`; 2004+ só `NM` — contra o TCGplayer market. **LP** entra SÓ com
+  referência LP: mediana de ≥3 vendas concluídas cujo título diga `LP`/`Lightly Played`
+  (sem nota, sem outra condição, mesma variante); pré-filtro seguro antes da consulta:
+  `preço COMC ≤ ref NM × (1 − desconto mín.)` (o NM é só TETO, nunca a comparação);
+  sem amostra → `lp_no_reference`. **Nunca comparar LP com NM.** `LP_WITH_REFERENCE=false` desliga.
+- **Slab** = só notas da allowlist `GRADED_ALLOW` (default PSA 8/9/10, CGC 9/9.5/10 Gem/
+  10 Pristine, BGS 9/9.5/10/10 Black Label, SGC 9/9.5/10, TAG 9.5/10). Um slab NUNCA é
+  comparado com preço de carta solta. **Referência = mediana de vendas concluídas** (eBay
+  via PriceCharting) da MESMA carta, variante, idioma, certificadora, nota e subcategoria
+  (BGS 10 Black ≠ BGS 10; CGC 10 Pristine ≠ Gem Mint; TAG 10 ≠ TAG 9.5) — título cita
+  SÓ essa nota e o mesmo conjunto de tokens de variante (reverse, 1st, shadowless…).
+  Janelas: ≥3 vendas em 180 d → referência válida (`OK`); ≥3 só em 365 d → válida com
+  nota `baixa-liquidez(365d)`; 1–2 vendas → `MATCH_REVIEW · vendas<3`; 0 → sem
+  referência, sem oportunidade (`slab_no_reference`). **Colunas do PriceCharting (mesmo
+  "PSA 10") e buckets genéricos ("Grade 9") NUNCA geram referência** — a coluna exata só
+  entra como sanidade (`coluna÷vendas` → MATCH_REVIEW se >30% longe da mediana).
+  Nota vizinha/variante diferente nunca é proxy. JP/CN/KR ficam para uma fase à parte
+  (só comparáveis com vendas do mesmo idioma).
 - **Fonte falhou ≠ sem venda**: rede/bloqueio/página sem tabelas no PriceCharting vira
   `PcError` → contador `Slabs com ERRO na fonte` (nunca "sem referência"); 5 falhas
   seguidas suspendem a passada de slabs no run; página de bloqueio/vazia NUNCA entra no
@@ -81,10 +87,12 @@ COMC (set-path browse, 2 passadas por set: cartas soltas + slabs)
    manualmente) — ambas na ordem do ranking. A formatação de linha tem UMA fonte:
    `comc_scanner/reporter.py` (`render_rows_table`/`render_row_line`/`classify_row`).
 3. **Mostre TODAS as linhas.**
-4. Colunas: `# | Desconto% | ROI% | COMC$ | Ref$ | Lucro$ | Pokémon | Carta | Set | Tipo | Ref | Conf | Status | Links`
-   - `Tipo` = `Raw NM` ou a nota (`PSA 10`, `CGC 10 Pristine`);
-   - `Ref` = `TCG market|mid|low` ou `PC <nota>` (`~` = proxy);
-   - `Status` = `OK` ou `MATCH_REVIEW · motivos` (confiança <0.90, `preço:mid/low`, `ref~proxy`);
+4. Colunas: `# | Desconto% | ROI bruto% | COMC$ | Ref$ | Spread$ | Pokémon | Carta | Set | Tipo | Ref | Conf | Status | Links`
+   (nunca "lucro": Spread$ = ref − COMC bruto, sem taxas; ROI bruto% = spread/COMC)
+   - `Tipo` = `Raw NM|EX-NM|LP` ou a nota (`PSA 10`, `CGC 10 Pristine`, `BGS 10 Black Label`);
+   - `Ref` = `TCG market|mid|low` ou `PC vendas <nota|LP> (n=…, mês..mês)`;
+   - `Status` = `OK` ou `MATCH_REVIEW · motivos` (confiança <0.90, `preço:mid/low`,
+     `vendas<3(n=…)`, `coluna÷vendas`) + nota `baixa-liquidez(365d)`;
    - `Links` = `[oferta](COMC) · [referência](TCGplayer p/ raw · PriceCharting p/ slab)`.
 5. **Não recomende comprar.**
 
@@ -121,13 +129,15 @@ Configuração por env (`.env.example` lista tudo): `MIN_DISCOUNT_PERCENT`,
 
 - **Recorrência é MANUAL** (operador, 2026-06-09): não criar Task Scheduler / cron /
   GitHub Actions de scan. (O workflow `scan.yml` via Firecrawl foi removido na v0.3.)
-- **NM-only** (raw) por igualdade com `COMC_CONDITION_ALLOW` (moderno: `nm`) /
-  `COMC_CONDITION_ALLOW_VINTAGE` (WotC: `nm,ex-nm`) e
+- **NM-only** (raw) por igualdade com `COMC_CONDITION_ALLOW` (2004+: `nm`) /
+  `COMC_CONDITION_ALLOW_VINTAGE` (WotC ≤2003: `nm,ex-nm`); LP só com referência LP própria; e
   **English-only** (descarta sub-impressões JP/KR/…): casar outra condição/idioma com o
   preço EN NM seria falso positivo.
 - **Desconto sobre a referência**: `(ref − COMC)/ref` (`margin.py`), limiar inteiro
-  `MIN_DISCOUNT_PERCENT` (default 20). ROI `(ref − COMC)/COMC` e lucro US$ vêm de
-  `ranking.compute_metrics` e só ordenam. Sem taxas embutidas.
+  `MIN_DISCOUNT_PERCENT` (default 20). ROI bruto `(ref − COMC)/COMC` e spread US$ vêm de
+  `ranking.compute_metrics` e só ordenam. Sem taxas embutidas. **Diagnóstico** (operador):
+  `scan --group all --min-price 5 --min-discount 10` + `comc_summary.py … --sensitivity 10,15,20`
+  → faixas 10–14,99% e 15–19,99% são diagnóstico, NÃO oportunidade; ≥20% = candidato.
 - **Lista de Pokémon fora do código** (`iconic_pokemon.csv`); nada hardcoded.
 - **Referência de slab = PriceCharting por nota**; TCGplayer não precifica slab.
 
@@ -138,7 +148,8 @@ python -m pytest tests/    # 161 testes — offline, sem rede, sem browser
 ```
 
 `tests/fixtures/` traz páginas REAIS: vitrine ungraded (2026-06-08), duas vitrines
-`aGraded` (151 e Base Set, 2026-09-02) e uma página/busca do PriceCharting.
+`aGraded` (151 e Base Set, 2026-09-02) e duas páginas + uma busca do PriceCharting
+(Charizard ex 151; Charizard 4/102 Base Set com 375 vendas, títulos LP e PSA 8).
 
 ## Arquitetura
 
@@ -155,9 +166,9 @@ comc_scanner/
   pipeline.py            Scanner.run_scan (2 passadas/set) + process_listing (funil único) + FunnelStats
   matcher.py / normalize.py / tcg_index.py   identificação da carta no TCGplayer (confiança 0-1)
   tcgcsv_client.py / tcgdex_client.py        referência raw (market → mid → low; fallback TCGdex)
-  pricecharting_client.py                    referência de slab por nota (busca + guardas nome/número/set)
+  pricecharting_client.py                    mediana de vendas comparáveis (slab por nota exata; raw LP) + guardas nome/número/set
   margin.py              desconto (ref − comc)/ref
-  ranking.py             métricas (desconto, ROI, lucro) + ordem de ranking
+  ranking.py             métricas (desconto, ROI bruto, spread) + ordem de ranking
   reporter.py            tabela canônica + classify_row (OK/MATCH_REVIEW) + JSON/CSV + funil
   models.py              dataclasses (listing com grade, deal com pokemon/ref_source/status)
 comc_summary.py          ENTREGA canônica (JSON → markdown, 2 baldes, funil)
@@ -169,4 +180,4 @@ results/                 saídas (gitignored)
 
 - Código = **branch + PR**; nunca push direto na `main`.
 - Dados de scan, `.env`, caches e perfis de navegador não entram no repo.
-- Versão: **0.3.0** (`pyproject.toml` + `CHANGELOG.md`, 2026-09-02).
+- Versão: **0.4.0** (`pyproject.toml` + `CHANGELOG.md`, 2026-09-02).

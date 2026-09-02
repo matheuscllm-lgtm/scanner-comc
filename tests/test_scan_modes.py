@@ -78,8 +78,12 @@ def test_min_discount_default_is_20_percent():
 def test_graded_allowlist_default():
     sc = Scanner(_settings())
     ok = ComcListing(raw_name="X", price=50.0, url="", graded=True, grade="PSA 10")
-    bad = ComcListing(raw_name="X", price=50.0, url="", graded=True, grade="CGC 10 GEM")
-    assert sc._grade_ok(ok) is True and sc._grade_ok(bad) is False
+    gem = ComcListing(raw_name="X", price=50.0, url="", graded=True, grade="CGC 10 GEM")
+    psa8 = ComcListing(raw_name="X", price=50.0, url="", graded=True, grade="PSA 8")
+    bad = ComcListing(raw_name="X", price=50.0, url="", graded=True, grade="PSA 7")
+    mnt = ComcListing(raw_name="X", price=50.0, url="", graded=True, grade="MNT 10")
+    assert sc._grade_ok(ok) and sc._grade_ok(gem) and sc._grade_ok(psa8)
+    assert sc._grade_ok(bad) is False and sc._grade_ok(mnt) is False
 
 
 def _product(rarity):
