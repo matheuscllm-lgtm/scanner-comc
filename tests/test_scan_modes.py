@@ -21,6 +21,16 @@ def test_set_path_browse_url_drops_rcomc_by_default():
     assert ",aUngraded," in url and ",gEX-NM," in url
 
 
+def test_accented_slug_is_percent_encoded_lowercase_like_comc_links():
+    """Slugs com acento ("Pokémon_EX_Hidden_Legends_-_Base"): a COMC roteia pelo texto
+    literal e os links dela usam %c3%a9 (minúsculo); %C3%A9 cai na categoria do ANO
+    (mistura sets — achado 2026-09-02). Slug já percent-encodado não pode ser re-encodado."""
+    url = build_browse_url(_settings(), era_path="2004/Pokémon_EX_Hidden_Legends_-_Base")
+    assert "/2004/Pok%c3%a9mon_EX_Hidden_Legends_-_Base," in url and "%C3" not in url
+    url2 = build_browse_url(_settings(), era_path="2004/Pok%c3%a9mon_EX_Hidden_Legends_-_Base")
+    assert "/2004/Pok%c3%a9mon_EX_Hidden_Legends_-_Base," in url2 and "%25" not in url2
+
+
 def test_seller_repo_opt_in_when_set():
     assert ",rCOMC," in build_browse_url(_settings(comc_seller_repo="COMC"), era_path="1999/X")
 

@@ -30,9 +30,9 @@ def test_groups_cover_validated_catalog_exactly_no_overlap():
     assert set(union) == catalog
 
 
-def test_there_are_exactly_four_groups():
-    assert VALID_GROUP_NUMBERS == (1, 2, 3, 4)
-    assert set(SCAN_GROUPS) == {1, 2, 3, 4}
+def test_there_are_exactly_twelve_groups():
+    assert VALID_GROUP_NUMBERS == tuple(range(1, 13))
+    assert set(SCAN_GROUPS) == set(range(1, 13))
 
 
 def test_group_sets_returns_verbatim_names():
@@ -47,7 +47,7 @@ def test_group_sets_returns_verbatim_names():
 
 def test_group_sets_unknown_group_raises():
     with pytest.raises(KeyError):
-        group_sets(5)
+        group_sets(99)
 
 
 def test_era_derived_from_group():
@@ -57,6 +57,10 @@ def test_era_derived_from_group():
     assert group_era(2) == "recent"
     assert group_era(3) == "vintage"
     assert group_era(4) == "vintage"
+    # 2004-2019 = "middle" (NM só); SWSH 2020-2023 = "recent"
+    for n in range(5, 11):
+        assert group_era(n) == "middle", n
+    assert group_era(11) == "recent" and group_era(12) == "recent"
 
 
 def test_describe_groups_lists_every_set_and_needs_no_network():

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.1 — 2026-09-02 — catálogo 2004–2023 (grupos 5–12) + `validate-slugs` por pertencimento ao set
+
+### PR B — catálogo (regras do operador)
+- **Grupos 5–12** em `groups.py`: EX 2004-05 · EX 2006-07 + DP 2007 · DP/Platinum 2008-10 ·
+  HGSS + BW 2010-13 · XY 2014-16 · SM 2017-19 · SWSH 2020-21 · SWSH 2022 + Pokémon GO +
+  Crown Zenith. `--group 1-12|all`; `list-groups` e a skill listam todos.
+- **Catálogo**: 95 sets 2004-2023 (85 sets principais + 10 subsets com grupo tcgcsv próprio: Trainer Gallery ×4, Shiny Vault ×2, Radiant Collection ×2, Classic Collection, Galarian Gallery) validados ao vivo (página 1 raw + slabs) com o path
+  ASCII exato da COMC (`<ano>/Pokemon_<Série>_-_<Set>_-_Base`, descoberto pelas URLs das
+  listagens). Sem slug COMC (ficam fora, listados aqui): **EX Battle Stadium** e **Champion's Path**. Fora do escopo 2004-2022: SV01 Scarlet & Violet Base Set (2023).
+- **`validate-slugs` só valida se ≥80% da página 1 for do próprio set** (`page1_own_share`):
+  slug com acento (`Pokémon_…`) ou inexistente cai na categoria-pai da COMC (ano inteiro) e
+  mistura sets — 57 dos 85 candidatos iniciais caíram nisso. `_set_key` mantém as
+  palavras de série quando o nome só tem elas ("XY Base Set").
+- `build_browse_url` percent-encoda o path como a COMC (hex minúsculo, sem re-encodar).
+
 ## 0.4.0 — 2026-09-02 — comparáveis EXATOS (mediana de vendas), raw LP com referência LP, sensibilidade
 
 ### Regras do operador (PR A — mecanismo)

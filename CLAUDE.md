@@ -99,14 +99,14 @@ COMC (set-path browse, 2 passadas por set: cartas soltas + slabs)
 ## Como rodar
 
 > 🎯 **Skill `scan-comc`** (`.claude/skills/scan-comc/SKILL.md`): ao pedirem pra
-> "rodar o COMC", o agente **pergunta qual dos 4 grupos** (ou `all`), roda e entrega
+> "rodar o COMC", o agente **pergunta qual dos 12 grupos** (ou `all`), roda e entrega
 > via `comc_summary.py`.
 
 ```bash
 pip install -r requirements.txt && playwright install chromium   # 1ª vez
 python -m comc_scanner list-groups                               # sem rede
 python -m comc_scanner scan --group 1                             # raw + slabs, 20%, lista icônica
-python -m comc_scanner scan --group all                           # 4 grupos em sequência
+python -m comc_scanner scan --group all                           # 12 grupos em sequência (1999-2023)
 python -m comc_scanner scan --sets "Base Set,Jungle" --era vintage
 ```
 
@@ -138,6 +138,11 @@ Configuração por env (`.env.example` lista tudo): `MIN_DISCOUNT_PERCENT`,
   `ranking.compute_metrics` e só ordenam. Sem taxas embutidas. **Diagnóstico** (operador):
   `scan --group all --min-price 5 --min-discount 10` + `comc_summary.py … --sensitivity 10,15,20`
   → faixas 10–14,99% e 15–19,99% são diagnóstico, NÃO oportunidade; ≥20% = candidato.
+- **Slug de set = path ASCII exato da COMC** (`<ano>/Pokemon_<Série>_-_<Set>_-_Base`, sem
+  acento). Slug com acento ou inexistente cai numa **categoria-pai** (o ano inteiro) e
+  mistura sets — foi assim com o Neo Revelation antigo (paginação infinita) e com
+  `Pokémon_EX_Hidden_Legends`. `validate-slugs` só valida se ≥80% da página 1 for do
+  próprio set (`page1_own_share` no catálogo); a guarda de paginação é a segunda rede.
 - **Lista de Pokémon fora do código** (`iconic_pokemon.csv`); nada hardcoded.
 - **Referência de slab = PriceCharting por nota**; TCGplayer não precifica slab.
 
@@ -157,8 +162,8 @@ python -m pytest tests/    # 161 testes — offline, sem rede, sem browser
 comc_scanner/
   __main__.py            CLI: scan | list-groups | validate-slugs | warm | capture
   config.py              Settings (+ env) — MIN_DISCOUNT_PERCENT, GRADED_ALLOW, ICONIC_ONLY…
-  groups.py              os 4 grupos canônicos de sets (2 SV + 2 WotC)
-  comc_set_slugs.json    slugs de set validados na COMC (28 sets)
+  groups.py              os 12 grupos canônicos de sets (SV, WotC, EX, DP/Platinum, HGSS/BW, XY, SM, SWSH)
+  comc_set_slugs.json    slugs de set validados na COMC (1999-2023; `validate-slugs` confere ao vivo)
   iconic_pokemon.csv     lista do operador (rank, pokemon, score, sources) — EDITÁVEL
   iconic.py              match por palavra inteira contra a lista
   grading.py             parse da nota do slab (/Graded/<grader>/<nota> + título) + allowlist + coluna PC
@@ -180,4 +185,4 @@ results/                 saídas (gitignored)
 
 - Código = **branch + PR**; nunca push direto na `main`.
 - Dados de scan, `.env`, caches e perfis de navegador não entram no repo.
-- Versão: **0.4.0** (`pyproject.toml` + `CHANGELOG.md`, 2026-09-02).
+- Versão: **0.4.1** (`pyproject.toml` + `CHANGELOG.md`, 2026-09-02).

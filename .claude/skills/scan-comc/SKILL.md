@@ -5,14 +5,14 @@ description: >-
   Pristine 10, só Pokémon da lista icônica, desconto ≥20% sobre a referência) por
   GRUPOS de sets e entregar via comc_summary.py. Use SEMPRE que o operador pedir
   para rodar o scanner do COMC / "roda o COMC" / "scan COMC" / "escaneia a COMC" /
-  "roda o grupo X do COMC": antes de rodar, PERGUNTE qual dos 4 grupos (ou todos)
+  "roda o grupo X do COMC": antes de rodar, PERGUNTE qual dos 12 grupos (ou todos)
   ele quer.
 ---
 
 # Scan do COMC por grupos — pergunte, rode, entregue
 
 O catálogo validado (sets `validated: true` de `comc_scanner/comc_set_slugs.json`)
-está dividido em **4 grupos** — fonte canônica `comc_scanner/groups.py`
+está dividido em **12 grupos** (SV, WotC, EX, DP/Platinum, HGSS/BW, XY, SM, SWSH) — fonte canônica `comc_scanner/groups.py`
 (`python -m comc_scanner list-groups` lista sem rede). Cada set é varrido em
 **duas passadas**: cartas soltas (WotC ≤2003 NM ou EX-NM; 2004+ só NM; LP só com
 referência LP = mediana de ≥3 vendas "LP") e slabs (PSA 8-10, CGC 9-10 Gem/Pristine,
@@ -40,7 +40,31 @@ Base Set · Jungle · Fossil · Base Set 2 · Team Rocket · Gym Heroes · Gym C
 ### Grupo 4 — WotC 2001-2003 (7 sets, era `vintage`, ~20-40 min*)
 Neo Discovery · Neo Revelation · Neo Destiny · Legendary Collection · Expedition · Aquapolis · Skyridge
 
-### `all` — os 4 em sequência (~2-4 h; um único JSON `comc_deals_all_latest.json`)
+### Grupo 5 — EX 2004-2005 (8 sets, era `middle`, ~32-64 min*)
+EX Team Magma vs Team Aqua · EX Hidden Legends · EX FireRed & LeafGreen · EX Team Rocket Returns · EX Deoxys · EX Emerald · EX Unseen Forces · EX Delta Species
+
+### Grupo 6 — EX 2006-2007 + DP 2007 (8 sets, era `middle`, ~32-64 min*)
+EX Legend Maker · EX Holon Phantoms · EX Crystal Guardians · EX Dragon Frontiers · EX Power Keepers · Diamond and Pearl · Mysterious Treasures · Secret Wonders
+
+### Grupo 7 — DP/Platinum 2008-2010 (8 sets, era `middle`, ~32-64 min*)
+Great Encounters · Majestic Dawn · Legends Awakened · Stormfront · Platinum · Rising Rivals · Supreme Victors · Arceus
+
+### Grupo 8 — HGSS + BW 2010-2013 (17 sets, era `middle`, ~68-136 min*)
+HeartGold SoulSilver · Unleashed · Undaunted · Triumphant · Call of Legends · Black and White · Emerging Powers · Noble Victories · Next Destinies · Dark Explorers · Dragons Exalted · Boundaries Crossed · Plasma Storm · Plasma Freeze · Plasma Blast · Legendary Treasures · Legendary Treasures: Radiant Collection
+
+### Grupo 9 — XY 2014-2016 (14 sets, era `middle`, ~56-112 min*)
+XY Base Set · XY - Flashfire · XY - Furious Fists · XY - Phantom Forces · XY - Primal Clash · XY - Roaring Skies · XY - Ancient Origins · XY - BREAKthrough · XY - BREAKpoint · Generations · XY - Fates Collide · XY - Steam Siege · XY - Evolutions · Generations: Radiant Collection
+
+### Grupo 10 — SM 2017-2019 (17 sets, era `middle`, ~68-136 min*)
+SM Base Set · SM - Guardians Rising · SM - Burning Shadows · Shining Legends · SM - Crimson Invasion · SM - Ultra Prism · SM - Forbidden Light · SM - Celestial Storm · Dragon Majesty · SM - Lost Thunder · SM - Team Up · Detective Pikachu · SM - Unbroken Bonds · SM - Unified Minds · Hidden Fates · SM - Cosmic Eclipse · Hidden Fates: Shiny Vault
+
+### Grupo 11 — SWSH 2020-2021 (12 sets, era `recent`, ~48-96 min*)
+SWSH01: Sword & Shield Base Set · SWSH02: Rebel Clash · SWSH03: Darkness Ablaze · SWSH04: Vivid Voltage · Shining Fates · SWSH05: Battle Styles · SWSH06: Chilling Reign · SWSH07: Evolving Skies · Celebrations · SWSH08: Fusion Strike · Shining Fates: Shiny Vault · Celebrations: Classic Collection
+
+### Grupo 12 — SWSH 2022 + Crown Zenith (11 sets, era `recent`, ~44-88 min*)
+SWSH09: Brilliant Stars · SWSH10: Astral Radiance · Pokemon GO · SWSH11: Lost Origin · SWSH12: Silver Tempest · SWSH: Crown Zenith · SWSH09: Brilliant Stars Trainer Gallery · SWSH10: Astral Radiance Trainer Gallery · SWSH11: Lost Origin Trainer Gallery · SWSH12: Silver Tempest Trainer Gallery · SWSH: Crown Zenith: Galarian Gallery
+
+### `all` — os 12 em sequência (~6-12 h; um único JSON `comc_deals_all_latest.json`)
 
 (*estimativas: 2 passadas por set, ~100 listagens/página, delay 4 s/página; slabs de
 Pokémon icônicos ainda consultam o PriceCharting a 2 s/carta.)

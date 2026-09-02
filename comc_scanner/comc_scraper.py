@@ -103,6 +103,18 @@ def _extract_number(text: str) -> str | None:
     return m.group(1) if m else None
 
 
+_PCT_RE = re.compile(r"%[0-9A-Fa-f]{2}")
+
+
+def _encode_path(era_path: str) -> str:
+    """Percent-encoda o set-path como a PRÓPRIA COMC faz nos links dela: hex minúsculo
+    (``Pok%c3%a9mon``) e sem re-encodar um slug já encodado. A COMC roteia pelo texto
+    literal: ``%C3%A9`` (maiúsculo, padrão do urllib) cai na categoria do ANO e mistura
+    sets (achado 2026-09-02)."""
+    quoted = urllib.parse.quote(urllib.parse.unquote(era_path), safe="/()")
+    return _PCT_RE.sub(lambda m: m.group(0).lower(), quoted)
+
+
 def build_browse_url(
     settings: Settings, search_term: str | None = None,
     era_path: str | None = None, page: int = 1, items: int = 100,
@@ -112,7 +124,7 @@ def build_browse_url(
     a nota vem do path de cada listing); `False` = cartas soltas (`aUngraded`)."""
     path = "/Cards/Pokemon"
     if era_path:
-        path += "/" + urllib.parse.quote(era_path)
+        path += "/" + _encode_path(era_path)
     segments: list[str] = []
     if search_term:
         segments.append("=" + urllib.parse.quote_plus(search_term))
