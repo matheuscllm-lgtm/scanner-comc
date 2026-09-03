@@ -101,3 +101,15 @@ def test_product_page_url_resolves_exact_card_page(monkeypatch, tmp_path):
     url = pc.product_page_url("Charizard ex", "006/165", "SV: Scarlet & Violet 151", cache_dir=str(tmp_path))
     assert url == "https://www.pricecharting.com/game/pokemon-scarlet-&-violet-151/charizard-ex-6"
     assert pc.product_page_url("Cartanaoexiste", "999/165", "SV: Scarlet & Violet 151", cache_dir=str(tmp_path)) is None
+
+
+def test_product_page_url_tolerates_page_without_tables(monkeypatch, tmp_path):
+    """Link-only: página casada mas sem tabela de preço/vendas (lançamento recente) ainda é
+    um link válido — não é erro de fonte (review PR #32)."""
+    from pathlib import Path as _P
+    fix = _P(__file__).parent / "fixtures"
+    search = (fix / "pc_search_charizard_ex_151.html").read_text(encoding="utf-8")
+    bare = "<html><body>" + "layout sem tabelas " * 400 + "</body></html>"
+    monkeypatch.setattr(pc, "fetch_page", lambda url, cache_dir=None: search if "search-products" in url else bare)
+    assert pc.product_page_url("Charizard ex", "006/165", "SV: Scarlet & Violet 151",
+                               cache_dir=str(tmp_path)) == "https://www.pricecharting.com/game/pokemon-scarlet-&-violet-151/charizard-ex-6"

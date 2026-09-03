@@ -222,8 +222,8 @@ def _ref_label(row: dict) -> str:
 def _links_cell(row: dict) -> str:
     """Coluna `Links`: "[oferta](comc_url) · [referência](ref_url|tcg_url)".
 
-    `oferta` = listagem na COMC; `referência` = página onde conferir o preço usado
-    (TCGplayer para raw NM; PriceCharting para slab/LP). Lidos do deal, nunca
+    `oferta` = listagem na COMC; `referência` = página da carta no PriceCharting (raw, LP e
+    slab; raw cai no TCGplayer se não houver página ou a fonte falhar). Lidos do deal, nunca
     inventados; "—" se nenhum. URLs percent-encodadas (espaço/parênteses quebram o
     markdown).
     """

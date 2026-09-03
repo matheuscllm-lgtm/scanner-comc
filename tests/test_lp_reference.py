@@ -146,3 +146,17 @@ def test_pricecharting_lookup_only_for_approved_raw_deals(index, monkeypatch):
     sc = pl.Scanner(_settings())
     assert sc.process_listing(_raw(95.0, "NM"), index, CTX, pl.KIND_RAW, era="recent") is None  # 5% < 20%
     assert called == [] and sc.stats["below_discount"] == 1
+
+
+def test_link_lookup_failures_never_trip_the_slab_breaker(index, monkeypatch):
+    """Review PR #32: o link é cosmético — 3 falhas seguidas desligam SÓ o link
+    (`_pc_link_down`); o breaker dos slabs/LP (`_pc_down`) não é tocado."""
+    def boom(*a, **k):
+        raise PcError("429")
+    monkeypatch.setattr(pl, "product_page_url", boom)
+    sc = pl.Scanner(_settings())
+    for i in range(5):
+        d = sc.process_listing(_raw(60.0 + i, "NM"), index, CTX, pl.KIND_RAW, era="recent")
+        assert d is not None and d.as_row()["ref_url"].startswith("https://www.tcgplayer.com/")
+    assert sc._pc_down is False and sc._pc_link_down is True
+    assert sc.stats["pc_link_error"] == 5 and sc.stats["slab_pc_error"] == 0

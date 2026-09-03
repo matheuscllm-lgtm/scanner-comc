@@ -538,6 +538,21 @@ def choose_path(paths: list[str], card_name, number, set_label) -> str | None:
     return min(matches, key=lambda p: len(p.rsplit("/", 1)[-1]))
 
 
+def _product_path(card_name, number, set_label, cache_dir: str | None = None) -> str | None:
+    """Busca (nome+número+set) → ``choose_path`` (match exato) → path ``/game/...`` ou
+    None. Rede/bloqueio → ``PcError``."""
+    set_name = clean_set_name(set_label)
+    base_name = clean_card_name(card_name)
+    num = norm_number(number)
+    query = " ".join(p for p in ("pokemon", set_name, base_name, num) if p)
+    body = fetch_page(f"{BASE_URL}/search-products?q={urllib.parse.quote(query)}&type=prices",
+                      cache_dir=cache_dir)
+    path = choose_path(search_card_paths(body), card_name, number, set_label)
+    if not path:
+        log.info("PC: sem página que case '%s' #%s (%s).", base_name, num, set_name)
+    return path
+
+
 def _product_page(card_name, number, set_label, cache_dir: str | None = None) -> tuple[str, str] | None:
     """Busca (nome+número+set) → ``choose_path`` (match exato, como sempre) → (url, html
     da página da carta), ou None quando nenhum resultado casa. Rede/bloqueio, ou página
@@ -567,8 +582,10 @@ def product_page_url(card_name, number, set_label, cache_dir: str | None = None)
     slabs) — usada como link `[referência]` das cartas soltas (operador 2026-09-02: a
     página do PC é mais informativa: vendas eBay, gráfico, PSA 10/9). O PREÇO raw continua
     sendo o TCGplayer market. Sem match → None (o link cai no TCGplayer); PcError propaga."""
-    found = _product_page(card_name, number, set_label, cache_dir=cache_dir)
-    return found[0] if found else None
+    # Só o path: uma página casada SEM tabelas (lançamento recente) ainda é link válido —
+    # o check de tabelas de `_product_page` é para quem precisa de VENDAS (slab/LP).
+    path = _product_path(card_name, number, set_label, cache_dir=cache_dir)
+    return BASE_URL + path if path else None
 
 
 def graded_reference(card_name, number, set_label, grade, cache_dir: str | None = None,
