@@ -94,7 +94,7 @@ COMC (set-path browse, 2 passadas por set: cartas soltas + slabs)
    - `Status` = `OK` ou `MATCH_REVIEW · motivos` (confiança <0.90, `preço:mid/low`,
      `vendas<3(n=…)`, `coluna÷vendas`) + nota `baixa-liquidez(365d)`;
    - `Links` = `[oferta](COMC) · [referência](página da carta no PriceCharting — raw, LP e slab;
-     raw cai no TCGplayer só se a carta não tiver página no PC)`. O PREÇO raw segue o TCGplayer market.
+     raw cai no TCGplayer se a carta não tiver página no PC ou se a fonte falhar)`. O PREÇO raw segue o TCGplayer market.
 5. **Não recomende comprar.**
 
 ## Como rodar
@@ -150,7 +150,7 @@ Configuração por env (`.env.example` lista tudo): `MIN_DISCOUNT_PERCENT`,
 ## Testes
 
 ```bash
-python -m pytest tests/    # 161 testes — offline, sem rede, sem browser
+python -m pytest tests/    # 259 testes — offline, sem rede, sem browser
 ```
 
 `tests/fixtures/` traz páginas REAIS: vitrine ungraded (2026-06-08), duas vitrines
@@ -186,4 +186,4 @@ results/                 saídas (gitignored)
 
 - Código = **branch + PR**; nunca push direto na `main`.
 - Dados de scan, `.env`, caches e perfis de navegador não entram no repo.
-- Versão: **0.4.1** (`pyproject.toml` + `CHANGELOG.md`, 2026-09-02).
+- Versão: **0.4.3** (`pyproject.toml` + `CHANGELOG.md`, 2026-09-02).

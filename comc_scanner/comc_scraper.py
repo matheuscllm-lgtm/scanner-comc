@@ -236,14 +236,22 @@ def _parse_dom(html: str) -> list[ComcListing]:
     if len(blocks) <= 1:
         return _parse_dom_loose(html)  # unfamiliar layout: best-effort fallback
     for block in blocks[1:]:
-        m = _DETAIL_URL_RE.search(block)
+        lp = _LISTPRICE_RE.search(block)
+        # O link PRÓPRIO do tile (título) vem ANTES do `listprice`; depois do preço já
+        # começa o link-imagem do tile SEGUINTE. Um tile sem link /Cards/ próprio (leilão
+        # eBay promovido: link /Promotions/eBay_Auction/…, "3d left") é descartado — nunca
+        # roubar o link do vizinho e colar nele o preço errado (Sylveon PSA 10 a US$15,50,
+        # captura real 2026-09-02).
+        own = block[: lp.start()] if lp else block
+        m = _DETAIL_URL_RE.search(own)
         if not m:
             continue
+        if lp and "auctionItem" in block[lp.start(): lp.start() + 120]:
+            continue  # leilão (não é Buy-It-Now da COMC)
         url, _year, set_seg, number_seg, name_seg, item_id, graded_seg, src_seg, cond_seg = m.groups()
         if url.startswith("/"):  # relative href (live-browser DOM) -> absolute
             url = COMC_BASE + url
         # Price: the first $-amount in the listprice region (falls back to first in block).
-        lp = _LISTPRICE_RE.search(block)
         price = _to_float(block[lp.end():] if lp else block)
         if price is None:
             continue
@@ -517,6 +525,11 @@ class ComcScraper:
                 # blocks and trip a circuit breaker (avoids burning credits on a hard block).
                 raise
             except Exception as exc:  # noqa: BLE001 — one set must not kill the sweep
+                if "has been closed" in str(exc):
+                    # Chrome/contexto fechado (operador fechou a janela, crash): NADA mais
+                    # vai carregar — abortar o run com erro, em vez de "varrer" os sets
+                    # restantes com 0 listagens (diagnóstico 2026-09-02, grupo 5).
+                    raise ComcAccessError(f"browser/contexto fechado: {exc}") from exc
                 log.warning("COMC page %s failed (%s); stopping this set.", page_no, exc)
                 break
             if not listings:
