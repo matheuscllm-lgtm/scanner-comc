@@ -96,6 +96,8 @@ FUNNEL_LABELS = [
     ("lp_no_reference", "Raw LP sem ≥3 vendas LP comparáveis — sem referência"),
     ("lp_pc_error", "Raw LP com ERRO na fonte PriceCharting"),
     ("below_discount", "Descartadas: desconto abaixo do mínimo"),
+    ("pc_link_missing", "Raw aprovadas sem página no PriceCharting (link [referência] = TCGplayer)"),
+    ("pc_link_error", "Raw aprovadas com ERRO na fonte PriceCharting ao buscar o link (= TCGplayer)"),
     ("ok", "Aprovadas OK (antes da dedupe)"),
     ("review", "Aprovadas MATCH_REVIEW (antes da dedupe)"),
     ("low_confidence", "Balde low-confidence (antes da dedupe)"),
@@ -220,8 +222,8 @@ def _ref_label(row: dict) -> str:
 def _links_cell(row: dict) -> str:
     """Coluna `Links`: "[oferta](comc_url) · [referência](ref_url|tcg_url)".
 
-    `oferta` = listagem na COMC; `referência` = página onde conferir o preço usado
-    (TCGplayer para raw NM; PriceCharting para slab/LP). Lidos do deal, nunca
+    `oferta` = listagem na COMC; `referência` = página da carta no PriceCharting (raw, LP e
+    slab; raw cai no TCGplayer se não houver página ou a fonte falhar). Lidos do deal, nunca
     inventados; "—" se nenhum. URLs percent-encodadas (espaço/parênteses quebram o
     markdown).
     """

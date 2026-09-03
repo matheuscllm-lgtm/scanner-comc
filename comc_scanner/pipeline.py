@@ -32,7 +32,8 @@ from .margin import gross_margin
 from .matcher import match
 from .models import Deal
 from .normalize import normalize_set, set_aliases
-from .pricecharting_client import PcError, graded_reference, raw_condition_reference, variant_tokens
+from .pricecharting_client import (PcError, graded_reference, product_page_url,
+                                   raw_condition_reference, variant_tokens)
 from .ranking import sort_key
 from .reporter import Reporter, classify_row
 from .segments import TcgSet, select_sets
@@ -119,6 +120,8 @@ class Scanner:
         self._pc_errors = 0      # falhas SEGUIDAS do PriceCharting
         self._pc_down = False    # ≥PC_MAX_CONSECUTIVE_ERRORS → slabs suspensos no run
         self.aborted = False     # run interrompido (browser fechado / COMC inacessível)
+        self._pc_link_errors = 0  # falhas SEGUIDAS do link [referência] (cosmético)
+        self._pc_link_down = False  # ≥PC_LINK_MAX_ERRORS → só o link é suspenso
         try:
             signal.signal(signal.SIGINT, self._on_signal)
             signal.signal(signal.SIGTERM, self._on_signal)
@@ -364,6 +367,7 @@ class Scanner:
         return bool(listing.grade) and listing.grade in self.settings.graded_allow
 
     PC_MAX_CONSECUTIVE_ERRORS = 5
+    PC_LINK_MAX_ERRORS = 3  # breaker PRÓPRIO do link (nunca derruba slabs/LP)
 
     @staticmethod
     def _listing_variants(listing) -> frozenset[str]:
@@ -521,6 +525,33 @@ class Scanner:
         if deal.margin < s.min_gross_margin:
             st.bump("below_discount")
             return None
+        if deal.ref_source == "tcgplayer":
+            # Link [referência] da carta solta = página do PriceCharting (mais informativa:
+            # vendas eBay, gráfico, PSA 10/9) — só para deals aprovados (1-2 requests cada).
+            # O PREÇO continua o TCGplayer market; sem página/erro → link do TCGplayer.
+            # Breaker PRÓPRIO: falha do link (cosmético) nunca suspende slabs/LP.
+            url = None
+            if self._pc_link_down:
+                st.bump("pc_link_error")
+            else:
+                try:
+                    url = product_page_url(deal.product.name, deal.product.number,
+                                           deal.product.set_name, cache_dir=s.pc_cache_dir)
+                except PcError as exc:
+                    self._pc_link_errors += 1
+                    st.bump("pc_link_error")
+                    log.warning("PriceCharting (link) falhou (%d seguidas): %s", self._pc_link_errors, exc)
+                    if self._pc_link_errors >= self.PC_LINK_MAX_ERRORS:
+                        self._pc_link_down = True
+                        log.error("PriceCharting (link): %d falhas seguidas — links [referência] "
+                                  "das cartas soltas caem no TCGplayer daqui em diante.",
+                                  self._pc_link_errors)
+                else:
+                    self._pc_link_errors = 0
+                    if url:
+                        deal.ref_url = url
+                    else:
+                        st.bump("pc_link_missing")
         status, reasons = classify_row(deal.as_row(), trust=s.trust_confidence)
         deal.status, deal.review_reasons = status, tuple(reasons)
         if deal.match_confidence < s.min_match_confidence:

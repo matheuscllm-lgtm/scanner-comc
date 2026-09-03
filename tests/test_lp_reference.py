@@ -9,6 +9,7 @@ from comc_scanner.config import load_settings
 from comc_scanner.models import ComcListing
 from comc_scanner.normalize import normalize_set
 from comc_scanner.pricecharting_client import PcError, SalesRef
+from comc_scanner.reporter import render_row_line
 from comc_scanner.tcg_index import TcgIndex
 
 SET = "SV: Scarlet & Violet 151"
@@ -109,3 +110,53 @@ def test_listing_variants_feed_the_comparable_filter(index, monkeypatch):
     L.raw_name = "Charizard ex - Reverse Holo"
     pl.Scanner(_settings()).process_listing(L, index, CTX, pl.KIND_RAW, era="recent")
     assert seen["variants"] == frozenset({"reverse"})
+
+
+# --- link [referência] das cartas soltas = página do PriceCharting (operador 2026-09-02) ---
+
+def test_raw_deal_reference_link_points_to_pricecharting_page_price_stays_tcgplayer(index, monkeypatch):
+    monkeypatch.setattr(pl, "product_page_url",
+                        lambda *a, **k: "https://www.pricecharting.com/game/pokemon-scarlet-&-violet-151/charizard-ex-6")
+    sc = pl.Scanner(_settings())
+    d = sc.process_listing(_raw(60.0, "NM"), index, CTX, pl.KIND_RAW, era="recent")
+    assert d is not None and d.ref_source == "tcgplayer" and d.tcg_reference == 100.0
+    row = d.as_row()
+    assert row["ref_url"].startswith("https://www.pricecharting.com/") and row["tcg_url"].startswith("https://www.tcgplayer.com/")
+    assert "[referência](https://www.pricecharting.com/" in render_row_line(row, 1)
+
+
+def test_raw_deal_without_pricecharting_page_keeps_tcgplayer_link(index, monkeypatch):
+    monkeypatch.setattr(pl, "product_page_url", lambda *a, **k: None)
+    sc = pl.Scanner(_settings())
+    d = sc.process_listing(_raw(60.0, "NM"), index, CTX, pl.KIND_RAW, era="recent")
+    assert d is not None and d.as_row()["ref_url"].startswith("https://www.tcgplayer.com/")
+    assert sc.stats["pc_link_missing"] == 1
+
+    def boom(*a, **k):
+        raise PcError("429")
+    monkeypatch.setattr(pl, "product_page_url", boom)
+    d2 = sc.process_listing(_raw(61.0, "NM"), index, CTX, pl.KIND_RAW, era="recent")
+    assert d2 is not None and d2.as_row()["ref_url"].startswith("https://www.tcgplayer.com/")
+    assert sc.stats["pc_link_error"] == 1
+
+
+def test_pricecharting_lookup_only_for_approved_raw_deals(index, monkeypatch):
+    called = []
+    monkeypatch.setattr(pl, "product_page_url", lambda *a, **k: called.append(1) or None)
+    sc = pl.Scanner(_settings())
+    assert sc.process_listing(_raw(95.0, "NM"), index, CTX, pl.KIND_RAW, era="recent") is None  # 5% < 20%
+    assert called == [] and sc.stats["below_discount"] == 1
+
+
+def test_link_lookup_failures_never_trip_the_slab_breaker(index, monkeypatch):
+    """Review PR #32: o link é cosmético — 3 falhas seguidas desligam SÓ o link
+    (`_pc_link_down`); o breaker dos slabs/LP (`_pc_down`) não é tocado."""
+    def boom(*a, **k):
+        raise PcError("429")
+    monkeypatch.setattr(pl, "product_page_url", boom)
+    sc = pl.Scanner(_settings())
+    for i in range(5):
+        d = sc.process_listing(_raw(60.0 + i, "NM"), index, CTX, pl.KIND_RAW, era="recent")
+        assert d is not None and d.as_row()["ref_url"].startswith("https://www.tcgplayer.com/")
+    assert sc._pc_down is False and sc._pc_link_down is True
+    assert sc.stats["pc_link_error"] == 5 and sc.stats["slab_pc_error"] == 0

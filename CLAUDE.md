@@ -93,7 +93,8 @@ COMC (set-path browse, 2 passadas por set: cartas soltas + slabs)
    - `Ref` = `TCG market|mid|low` ou `PC vendas <nota|LP> (n=…, mês..mês)`;
    - `Status` = `OK` ou `MATCH_REVIEW · motivos` (confiança <0.90, `preço:mid/low`,
      `vendas<3(n=…)`, `coluna÷vendas`) + nota `baixa-liquidez(365d)`;
-   - `Links` = `[oferta](COMC) · [referência](TCGplayer p/ raw · PriceCharting p/ slab)`.
+   - `Links` = `[oferta](COMC) · [referência](página da carta no PriceCharting — raw, LP e slab;
+     raw cai no TCGplayer se a carta não tiver página no PC ou se a fonte falhar)`. O PREÇO raw segue o TCGplayer market.
 5. **Não recomende comprar.**
 
 ## Como rodar
@@ -185,4 +186,4 @@ results/                 saídas (gitignored)
 
 - Código = **branch + PR**; nunca push direto na `main`.
 - Dados de scan, `.env`, caches e perfis de navegador não entram no repo.
-- Versão: **0.4.2** (`pyproject.toml` + `CHANGELOG.md`, 2026-09-02).
+- Versão: **0.4.3** (`pyproject.toml` + `CHANGELOG.md`, 2026-09-02).

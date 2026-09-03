@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.3 — 2026-09-02 — link [referência] das cartas soltas = página do PriceCharting
+
+- Decisão do operador: o link `[referência]` de raw NM/EX-NM passa a ser a página exata da carta no PriceCharting (vendas eBay, gráfico, PSA 10/9); o PREÇO continua o TCGplayer market. Só para deals aprovados (1-2 requests cada); sem página/erro → link do TCGplayer (`pc_link_missing`/`pc_link_error` no funil).
 ## 0.4.2 — 2026-09-02 — preço do tile vizinho (leilão eBay) + browser fechado aborta o run
 
 - **Bug de alinhamento no parser da COMC**: um tile de leilão eBay promovido (link
