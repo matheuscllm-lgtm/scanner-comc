@@ -562,6 +562,15 @@ def _product_page(card_name, number, set_label, cache_dir: str | None = None) ->
 
 # --- API usada pelo pipeline ---------------------------------------------------
 
+def product_page_url(card_name, number, set_label, cache_dir: str | None = None) -> str | None:
+    """URL da página EXATA da carta no PriceCharting (mesmo match nome+número+set dos
+    slabs) — usada como link `[referência]` das cartas soltas (operador 2026-09-02: a
+    página do PC é mais informativa: vendas eBay, gráfico, PSA 10/9). O PREÇO raw continua
+    sendo o TCGplayer market. Sem match → None (o link cai no TCGplayer); PcError propaga."""
+    found = _product_page(card_name, number, set_label, cache_dir=cache_dir)
+    return found[0] if found else None
+
+
 def graded_reference(card_name, number, set_label, grade, cache_dir: str | None = None,
                      variants: frozenset[str] = frozenset()) -> SalesRef | None:
     """Nome+número+set+nota → SalesRef (mediana de vendas da MESMA certificadora + nota +

@@ -32,7 +32,8 @@ from .margin import gross_margin
 from .matcher import match
 from .models import Deal
 from .normalize import normalize_set, set_aliases
-from .pricecharting_client import PcError, graded_reference, raw_condition_reference, variant_tokens
+from .pricecharting_client import (PcError, graded_reference, product_page_url,
+                                   raw_condition_reference, variant_tokens)
 from .ranking import sort_key
 from .reporter import Reporter, classify_row
 from .segments import TcgSet, select_sets
@@ -520,6 +521,17 @@ class Scanner:
         if deal.margin < s.min_gross_margin:
             st.bump("below_discount")
             return None
+        if deal.ref_source == "tcgplayer":
+            # Link [referência] da carta solta = página do PriceCharting (mais informativa:
+            # vendas eBay, gráfico, PSA 10/9) — só para deals aprovados (1-2 requests cada).
+            # O PREÇO continua o TCGplayer market; sem página/erro → link do TCGplayer.
+            outcome, url = self._pc_guarded(
+                product_page_url, deal.product.name, deal.product.number,
+                deal.product.set_name, cache_dir=s.pc_cache_dir)
+            if outcome == "ok":
+                deal.ref_url = url
+            else:
+                st.bump({"no_reference": "pc_link_missing", "pc_error": "pc_link_error"}[outcome])
         status, reasons = classify_row(deal.as_row(), trust=s.trust_confidence)
         deal.status, deal.review_reasons = status, tuple(reasons)
         if deal.match_confidence < s.min_match_confidence:

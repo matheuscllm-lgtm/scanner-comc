@@ -93,7 +93,8 @@ COMC (set-path browse, 2 passadas por set: cartas soltas + slabs)
    - `Ref` = `TCG market|mid|low` ou `PC vendas <nota|LP> (n=…, mês..mês)`;
    - `Status` = `OK` ou `MATCH_REVIEW · motivos` (confiança <0.90, `preço:mid/low`,
      `vendas<3(n=…)`, `coluna÷vendas`) + nota `baixa-liquidez(365d)`;
-   - `Links` = `[oferta](COMC) · [referência](TCGplayer p/ raw · PriceCharting p/ slab)`.
+   - `Links` = `[oferta](COMC) · [referência](página da carta no PriceCharting — raw, LP e slab;
+     raw cai no TCGplayer só se a carta não tiver página no PC)`. O PREÇO raw segue o TCGplayer market.
 5. **Não recomende comprar.**
 
 ## Como rodar

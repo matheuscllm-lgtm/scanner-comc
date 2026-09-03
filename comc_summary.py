@@ -212,6 +212,7 @@ def build_markdown(payload: dict, group: int | None = None,
         "dias (não em 180). "
         "`PC vendas <nota|LP> (n=…, mês..mês)` = mediana de ≥3 vendas concluídas da mesma "
         "carta, variante, certificadora e nota (ou LP explícito, para raw LP). "
+        "Link [referência] = página da carta no PriceCharting (vendas eBay, gráfico, PSA 10/9) também para cartas soltas; o preço raw continua o TCGplayer market (TCG market|mid|low). "
         "Desconto% = (ref − COMC)/ref; Spread$ = ref − COMC (bruto, sem taxas); "
         "ROI bruto% = spread/COMC. "
         "Ranking: ROI bruto → desconto % → spread US$ → popularidade do Pokémon. "

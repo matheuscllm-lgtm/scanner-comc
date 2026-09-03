@@ -88,3 +88,16 @@ def test_graded_reference_none_when_search_has_no_match(monkeypatch, tmp_path):
 def test_cache_dir_is_scoped_to_today(tmp_path):
     d = pc.today_cache_dir(tmp_path)
     assert d.name == pc.today_stamp() and d.parent == tmp_path
+
+
+def test_product_page_url_resolves_exact_card_page(monkeypatch, tmp_path):
+    """Link [referência] das cartas soltas: a página exata da carta no PriceCharting
+    (mesmo match nome+número+set dos slabs); sem match → None; nunca inventa URL."""
+    from pathlib import Path as _P
+    fix = _P(__file__).parent / "fixtures"
+    search = (fix / "pc_search_charizard_ex_151.html").read_text(encoding="utf-8")
+    product = (fix / "pc_product_charizard_ex_151.html").read_text(encoding="utf-8")
+    monkeypatch.setattr(pc, "fetch_page", lambda url, cache_dir=None: search if "search-products" in url else product)
+    url = pc.product_page_url("Charizard ex", "006/165", "SV: Scarlet & Violet 151", cache_dir=str(tmp_path))
+    assert url == "https://www.pricecharting.com/game/pokemon-scarlet-&-violet-151/charizard-ex-6"
+    assert pc.product_page_url("Cartanaoexiste", "999/165", "SV: Scarlet & Violet 151", cache_dir=str(tmp_path)) is None

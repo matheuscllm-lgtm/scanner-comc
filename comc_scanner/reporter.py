@@ -96,6 +96,8 @@ FUNNEL_LABELS = [
     ("lp_no_reference", "Raw LP sem ≥3 vendas LP comparáveis — sem referência"),
     ("lp_pc_error", "Raw LP com ERRO na fonte PriceCharting"),
     ("below_discount", "Descartadas: desconto abaixo do mínimo"),
+    ("pc_link_missing", "Raw aprovadas sem página no PriceCharting (link [referência] = TCGplayer)"),
+    ("pc_link_error", "Raw aprovadas com ERRO na fonte PriceCharting ao buscar o link (= TCGplayer)"),
     ("ok", "Aprovadas OK (antes da dedupe)"),
     ("review", "Aprovadas MATCH_REVIEW (antes da dedupe)"),
     ("low_confidence", "Balde low-confidence (antes da dedupe)"),

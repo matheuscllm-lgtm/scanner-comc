@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.3 — 2026-09-02 — link [referência] das cartas soltas = página do PriceCharting
+
+- Decisão do operador: o link `[referência]` de raw NM/EX-NM passa a ser a página exata da carta no PriceCharting (vendas eBay, gráfico, PSA 10/9); o PREÇO continua o TCGplayer market. Só para deals aprovados (1-2 requests cada); sem página/erro → link do TCGplayer (`pc_link_missing`/`pc_link_error` no funil).
+
 ## 0.4.1 — 2026-09-02 — catálogo 2004–2023 (grupos 5–12) + `validate-slugs` por pertencimento ao set
 
 ### PR B — catálogo (regras do operador)
