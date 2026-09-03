@@ -49,3 +49,17 @@ def test_graded_base_set_page_slabs_against_new_allowlist():
     assert {"PSA 8", "CGC 9", "PSA 9"} <= DEFAULT_GRADED_ALLOW
     assert keys["PSA 7"] >= 1 and keys["SGC 8.5"] >= 1 and keys["MNT 8.5"] >= 1
     assert not {"PSA 7", "SGC 8.5", "MNT 8.5"} & DEFAULT_GRADED_ALLOW
+
+
+def test_ebay_auction_tile_never_contaminates_the_next_listing():
+    """Captura real 2026-09-02 (Evolving Skies, slabs): um tile de LEILÃO eBay promovido
+    (Umbreon V, "3d left", link /Promotions/eBay_Auction/…, US$15,50) não tem link /Cards/;
+    o parser roubava o link-imagem do tile seguinte (Sylveon VMAX PSA 10, US$341,10) e
+    entregava o Sylveon a US$15,50 (falso positivo de 83% no diagnóstico)."""
+    from comc_scanner.comc_scraper import _parse_dom
+    html = (FIX / "comc_graded_evs_auction_capture.html").read_text(encoding="utf-8")
+    listings = _parse_dom(html)
+    sylveon = [L for L in listings if "Sylveon_VMAX/17626375" in L.url and L.grade == "PSA 10"]
+    assert len(sylveon) == 1 and sylveon[0].price == 341.10
+    assert not any(L.price == 15.50 for L in listings)  # o leilão não vira listagem
+    assert all("/Cards/Pokemon/" in L.url for L in listings)

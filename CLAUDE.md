@@ -149,7 +149,7 @@ Configuração por env (`.env.example` lista tudo): `MIN_DISCOUNT_PERCENT`,
 ## Testes
 
 ```bash
-python -m pytest tests/    # 161 testes — offline, sem rede, sem browser
+python -m pytest tests/    # 259 testes — offline, sem rede, sem browser
 ```
 
 `tests/fixtures/` traz páginas REAIS: vitrine ungraded (2026-06-08), duas vitrines
@@ -185,4 +185,4 @@ results/                 saídas (gitignored)
 
 - Código = **branch + PR**; nunca push direto na `main`.
 - Dados de scan, `.env`, caches e perfis de navegador não entram no repo.
-- Versão: **0.4.1** (`pyproject.toml` + `CHANGELOG.md`, 2026-09-02).
+- Versão: **0.4.2** (`pyproject.toml` + `CHANGELOG.md`, 2026-09-02).

@@ -168,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
         era = _resolve_era(args, settings)
         era = era if era != "all" else "vintage"
         scanner.run_scan(era, label=era)
-        return 0
+        return 2 if scanner.aborted else 0
     label = "all" if len(groups) > 1 else f"grupo{groups[0]}"
     best = None
     failed = 0
@@ -179,6 +179,11 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:  # noqa: BLE001 — um grupo quebrado não cancela os seguintes
             failed += 1
             log.exception("Grupo %d falhou; seguindo para o próximo (JSON parcial já gravado).", n)
+        if scanner.aborted:
+            failed += 1
+            log.error("Grupo %d ABORTADO (browser fechado / COMC inacessível) — sets restantes "
+                      "NÃO foram varridos; re-rode o grupo.", n)
+            scanner.aborted = False
         if scanner._stop:
             break
     return 1 if failed else 0

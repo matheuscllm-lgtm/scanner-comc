@@ -41,3 +41,26 @@ def test_hard_page_cap(monkeypatch):
     monkeypatch.setattr(cs, "HARD_MAX_PAGES", 5)
     got = list(sc.iter_listings(None, era_path="2001/X"))
     assert len(got) == 5 and len(calls) == 5
+
+
+def test_closed_browser_context_aborts_the_run_instead_of_empty_sets(monkeypatch):
+    """Diagnóstico 2026-09-02: o Chrome headful fechou no meio do grupo 5 e os 6 sets
+    restantes "passaram" com 0 listagens (warning por página, sem erro). Contexto fechado
+    = ComcAccessError (o run aborta, conta `comc_errors`); outra exceção segue como antes
+    (só encerra o set)."""
+    import pytest
+    from pathlib import Path
+    from comc_scanner.comc_scraper import ComcAccessError, ComcScraper
+    from comc_scanner.config import load_settings
+    sc = ComcScraper(load_settings(env_file=Path("/nonexistent.env")))
+
+    def closed(url):
+        raise RuntimeError("BrowserContext.new_page: Target page, context or browser has been closed")
+    monkeypatch.setattr(sc, "_fetch_html", closed)
+    with pytest.raises(ComcAccessError):
+        list(sc.iter_listings(None, era_path="1999/Pokemon_Base_Set_-_Base", max_pages=1))
+
+    def other(url):
+        raise RuntimeError("net::ERR_HTTP2_PROTOCOL_ERROR")
+    monkeypatch.setattr(sc, "_fetch_html", other)
+    assert list(sc.iter_listings(None, era_path="1999/Pokemon_Base_Set_-_Base", max_pages=1)) == []

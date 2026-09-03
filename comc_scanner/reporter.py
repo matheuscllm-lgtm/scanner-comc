@@ -102,6 +102,7 @@ FUNNEL_LABELS = [
     ("dedup_dropped", "Duplicadas removidas (mesma listagem vista mais de uma vez)"),
     ("listing_errors", "Listagens com erro interno (puladas)"),
     ("comc_errors", "Sets bloqueados na COMC"),
+    ("comc_aborted", "RUN ABORTADO (browser fechado / COMC inacessível) — sets restantes não varridos"),
     ("comc_partial_sets", "Sets/passadas truncados (bloqueio no meio)"),
     ("sets_capped_max_english", "Sets/passadas cortados por --max-english"),
 ]

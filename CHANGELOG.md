@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.2 — 2026-09-02 — preço do tile vizinho (leilão eBay) + browser fechado aborta o run
+
+- **Bug de alinhamento no parser da COMC**: um tile de leilão eBay promovido (link
+  `/Promotions/eBay_Auction/…`, "3d left") não tem link `/Cards/`; o parser roubava o
+  link-imagem do tile seguinte e colava nele o preço do leilão (Sylveon VMAX PSA 10 a
+  US$15,50 em vez de US$341,10 — falso "83%" no diagnóstico). Agora o link próprio só é
+  aceito ANTES do `listprice` e tiles `auctionItem` são descartados. Fixture real nova
+  `comc_graded_evs_auction_capture.html`.
+- **Chrome/contexto fechado** durante o scan vira `ComcAccessError` (run aborta com
+  `comc_errors`), em vez de "varrer" os sets restantes com 0 listagens.
+- Todo scan anterior a esta versão pode conter preços trocados em tiles vizinhos de
+  leilões: re-rodar.
+
 ## 0.4.1 — 2026-09-02 — catálogo 2004–2023 (grupos 5–12) + `validate-slugs` por pertencimento ao set
 
 ### PR B — catálogo (regras do operador)
