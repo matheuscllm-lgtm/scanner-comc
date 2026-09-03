@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "comc-scanner"
-version = "0.4.1"
+version = "0.4.2"
 description = "COMC arbitrage scanner for Pokemon TCG (raw NM + graded slabs) vs TCGplayer/PriceCharting references"
 readme = "README.md"
 requires-python = ">=3.10"
