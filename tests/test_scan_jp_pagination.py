@@ -81,3 +81,19 @@ def test_max_english_counts_only_valid_english_listings(tmp_path, monkeypatch):
     # as 3 japonesas da página 1 não contam; a página 2 é lida e o corte só acontece depois
     assert FakeScraper.pages_served == [1, 2]
     assert len(best.qualifying()) >= 1 and sc.stats["sets_capped_max_english"] == 1
+
+
+def test_closed_browser_marks_run_aborted_and_counts_it(tmp_path, monkeypatch):
+    """Review PR #31: run abortado (browser fechado) tem de ser visível — contador
+    próprio `comc_aborted` (≠ bloqueio Cloudflare) e flag `aborted` para o CLI sair ≠ 0."""
+    from comc_scanner.comc_scraper import ComcAccessError
+
+    class Dead(FakeScraper):
+        def iter_listings(self, search_term=None, era_path=None, max_pages=0, graded=False):
+            raise ComcAccessError("browser/contexto fechado")
+            yield  # noqa
+
+    sc = _scanner(tmp_path, monkeypatch)
+    monkeypatch.setattr(pl, "ComcScraper", Dead)
+    sc.run_scan("recent", "t")
+    assert sc.aborted is True and sc.stats["comc_aborted"] == 1 and sc.stats["comc_errors"] == 0

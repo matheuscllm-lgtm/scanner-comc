@@ -118,6 +118,7 @@ class Scanner:
         self._stop = False
         self._pc_errors = 0      # falhas SEGUIDAS do PriceCharting
         self._pc_down = False    # ≥PC_MAX_CONSECUTIVE_ERRORS → slabs suspensos no run
+        self.aborted = False     # run interrompido (browser fechado / COMC inacessível)
         try:
             signal.signal(signal.SIGINT, self._on_signal)
             signal.signal(signal.SIGTERM, self._on_signal)
@@ -637,8 +638,11 @@ class Scanner:
                     if self._stop:
                         break
         except ComcAccessError as exc:
-            log.error("COMC access blocked: %s", exc)
-            self.stats.bump("comc_errors")
+            # Browser fechado / COMC inacessível: o run ABORTA (sets restantes não foram
+            # varridos) — contador próprio, distinto do bloqueio Cloudflare por set.
+            log.error("Scan '%s' ABORTADO — COMC inacessível: %s", label, exc)
+            self.stats.bump("comc_aborted")
+            self.aborted = True
         finally:
             # SEMPRE grava o que foi encontrado (inclusive em erro inesperado): o JSON
             # `_latest` nunca fica desatualizado em silêncio.
