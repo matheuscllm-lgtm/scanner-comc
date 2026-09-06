@@ -9,6 +9,10 @@ description: >-
   ele quer.
 ---
 
+REGRA VIGENTE DO OPERADOR: ler DELIVERY_CHAT.md na raiz do repositório. Entrega somente no chat, preço de referência clicável, coleta nova sob demanda; não executar scans no GitHub Actions nem publicar resultados. Esta regra substitui instruções antigas conflitantes abaixo.
+
+
+
 # Scan do COMC por grupos — pergunte, rode, entregue
 
 O catálogo validado (sets `validated: true` de `comc_scanner/comc_set_slugs.json`)

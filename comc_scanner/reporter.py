@@ -27,6 +27,8 @@ antigos, nunca OK).
 """
 from __future__ import annotations
 
+from .chat_format import reference_price
+
 import csv
 import json
 import logging
@@ -267,6 +269,7 @@ def render_row_line(row: dict, rank: int, trust: float = TRUST_CONFIDENCE) -> st
     row["status"] = _status_cell(row, trust)
     row["ref_label"] = _ref_label(row)
     row["links"] = _links_cell(row)
+    row["tcg_reference"] = reference_price(row.get("tcg_reference"), row.get("tcg_url") if _source(row) == "tcgplayer" else row.get("ref_url") or row.get("tcg_url"))
     return "| " + " | ".join(_cell(k, row.get(k, "")) for k, _ in _TABLE_COLS) + " |"
 
 
