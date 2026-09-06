@@ -381,6 +381,25 @@ def lp_sales(sales: list[dict], variants: frozenset[str] = frozenset()) -> list[
     return out
 
 
+def ungraded_sales(sales: list[dict], variants: frozenset[str] = frozenset()) -> list[dict]:
+    """Vendas de carta SOLTA (qualquer condição): título SEM nota/certificadora, sem
+    idioma estrangeiro, preço > 0, mesmo conjunto de tokens de variante. NÃO é
+    referência de preço — mistura NM/LP/MP sem confirmação de condição. Serve só ao
+    TESTE DE PLAUSIBILIDADE da referência raw NM (``raw_plausibility``)."""
+    variants = frozenset(variants)
+    out = []
+    for s in sales:
+        t = s["title"]
+        if s.get("price", 0) <= 0 or _LANG_NOISE.search(t):
+            continue
+        if _ANY_GRADE_RE.search(t) or _BARE_GRADER_RE.search(t):
+            continue
+        if variant_tokens(t) != variants:
+            continue
+        out.append(s)
+    return out
+
+
 # --- janelas de recência e mediana --------------------------------------------
 
 def _today() -> _dt.date:
@@ -633,3 +652,19 @@ def raw_condition_reference(card_name, number, set_label, condition: str = "LP",
                  clean_card_name(card_name), norm_number(number), MIN_COMPARABLE_SALES,
                  f" {sorted(variants)}" if variants else "", SALES_LOW_LIQUIDITY_MAX_AGE_DAYS, len(comps))
     return ref
+
+
+def raw_plausibility(card_name, number, set_label, cache_dir: str | None = None,
+                     variants: frozenset[str] = frozenset()) -> SalesRef | None:
+    """TESTE DE PLAUSIBILIDADE da referência raw NM (operador, 2026-09-06): mediana
+    de ≥3 vendas concluídas de carta SOLTA (qualquer condição, sem nota, mesma
+    variante) em até 365 dias. NUNCA substitui o TCGplayer market — o pipeline só
+    compara as duas e, se divergirem demais, manda a linha para MATCH_REVIEW
+    (``reporter.RAW_SALES_DEVIATION_MAX``). Sem página/sem ≥3 vendas → None;
+    rede/bloqueio → ``PcError``."""
+    found = _product_page(card_name, number, set_label, cache_dir)
+    if found is None:
+        return None
+    url, page = found
+    comps = ungraded_sales(parse_sales(page), variants)
+    return sales_reference(comps, url, "raw", allow_thin=False)

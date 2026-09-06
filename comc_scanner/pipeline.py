@@ -5,7 +5,8 @@ Fluxo por set (catálogo ``comc_set_slugs.json``, agrupado em ``groups.py``):
     COMC set-path browse (2 passadas: cartas soltas ``aUngraded`` + slabs ``aGraded``)
     → funil ``process_listing`` (tipo/condição NM/idioma EN/piso US$/Pokémon icônico)
     → ``matcher.match`` (identifica a carta no TCGplayer; confiança 0-1)
-    → referência: raw NM/EX-NM = TCGplayer market (tcgcsv/TCGdex); raw LP = mediana de
+    → referência: raw NM = TCGplayer market (tcgcsv/TCGdex; EX-NM vai para revisão sem
+      preço); raw LP = mediana de
       vendas LP (PriceCharting, ≥3, nunca vs NM); slab = mediana de vendas concluídas da
       MESMA certificadora+nota+variante (PriceCharting; coluna/nota vizinha nunca é referência)
     → desconto ≥ ``MIN_DISCOUNT_PERCENT`` → status OK / MATCH_REVIEW
@@ -33,7 +34,8 @@ from .matcher import match
 from .models import Deal
 from .normalize import normalize_set, set_aliases
 from .pricecharting_client import (PcError, graded_reference, product_page_url,
-                                   raw_condition_reference, variant_tokens)
+                                   raw_condition_reference, raw_plausibility,
+                                   variant_tokens)
 from .ranking import sort_key
 from .reporter import Reporter, classify_row
 from .segments import TcgSet, select_sets
@@ -334,9 +336,9 @@ class Scanner:
 
     # --- filtros do funil --------------------------------------------------
     def _condition_ok(self, listing, era: str = "") -> bool:
-        """Condição por igualdade contra a allowlist DA ERA: moderno só "nm";
-        vintage "nm" ou "ex-nm" (a COMC gradua o raw WotC como EX-NM). Vazia/
-        desconhecida → fora (nunca comparar com o preço NM)."""
+        """Condição por igualdade: só "nm" (em todas as eras, política 2026-09-06 — EX-NM
+        vai para a revisão sem preço presumido, mesmo que um .env antigo a liste).
+        Vazia/desconhecida → fora (nunca comparar com o preço NM)."""
         cond = (listing.condition or "").strip().lower()
         allow = (self.settings.comc_condition_allow_vintage if era == "vintage"
                  else self.settings.comc_condition_allow)
@@ -443,6 +445,27 @@ class Scanner:
         if outcome == "ok":
             self._apply_sales_ref(deal, ref, "pricecharting-sales-lp")
         return outcome
+
+    def _raw_plausibility(self, deal: Deal, st: FunnelStats) -> None:
+        """Teste de plausibilidade da referência raw NM (operador, 2026-09-06): mediana
+        de ≥3 vendas de carta SOLTA da mesma carta/variante no PriceCharting, guardada
+        SÓ como sinal (`raw_sales_*`); `classify_row` manda para MATCH_REVIEW quando o
+        TCGplayer market diverge >40% dela. O preço NUNCA é trocado. Só roda quando a
+        página da carta já foi resolvida para o link (mesma busca; +1 request cacheado).
+        Falha da fonte é contada e ignorada — nunca derruba slabs/LP nem o run."""
+        try:
+            ref = raw_plausibility(deal.product.name, deal.product.number, deal.product.set_name,
+                                   cache_dir=self.settings.pc_cache_dir,
+                                   variants=self._listing_variants(deal.listing))
+        except PcError as exc:
+            st.bump("raw_plausibility_error")
+            log.warning("PriceCharting (plausibilidade raw) falhou: %s", exc)
+            return
+        if ref is None:
+            st.bump("raw_plausibility_missing")
+            return
+        deal.raw_sales_median, deal.raw_sales_n, deal.raw_sales_label = ref.price, ref.n_sales, ref.label
+        st.bump("raw_plausibility_ok")
 
     def _is_lp(self, listing) -> bool:
         return self.settings.lp_with_reference and \
@@ -562,7 +585,10 @@ class Scanner:
                         deal.ref_url = url
                     else:
                         st.bump("pc_link_missing")
-        status, reasons = classify_row(deal.as_row(), trust=s.trust_confidence)
+            if url and s.raw_plausibility:
+                self._raw_plausibility(deal, st)
+        status, reasons = classify_row(deal.as_row(), trust=s.trust_confidence,
+                                       extreme_pct=s.extreme_discount_percent)
         deal.status, deal.review_reasons = status, tuple(reasons)
         if deal.match_confidence < s.min_match_confidence:
             st.bump("low_confidence")

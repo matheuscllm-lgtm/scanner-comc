@@ -154,8 +154,8 @@ def test_pc_error_counter_resets_after_success(index, monkeypatch):
 
     monkeypatch.setattr(pl, "graded_reference", flaky)
     sc = pl.Scanner(_settings())
-    for i in range(8):
-        sc.process_listing(_slab(50.0 + i), index, CTX, pl.KIND_SLAB)
+    for i in range(8):  # 120..127 vs ref 200 = 36-40% (abaixo do teto de desconto extremo)
+        sc.process_listing(_slab(120.0 + i), index, CTX, pl.KIND_SLAB)
     assert sc._pc_down is False and sc.stats["slab_pc_error"] == 4 and sc.stats["ok"] == 4
 
 

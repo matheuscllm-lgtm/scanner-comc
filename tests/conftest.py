@@ -8,4 +8,5 @@ import pytest
 def _no_network_pricecharting_link(monkeypatch):
     from comc_scanner import pipeline as pl
     monkeypatch.setattr(pl, "product_page_url", lambda *a, **k: None)
+    monkeypatch.setattr(pl, "raw_plausibility", lambda *a, **k: None)
     yield
