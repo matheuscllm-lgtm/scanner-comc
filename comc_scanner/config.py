@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+from uuid import uuid4
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -151,7 +152,7 @@ class Settings:
     # --- Reference prices ---
     tcgcsv_force_refresh: bool = True    # sempre baixa o snapshot do dia (nunca reaproveita ontem)
     tcgdex_fallback: bool = True
-    pc_cache_dir: str = str(CACHE_DIR / "pc")
+    pc_cache_dir: str = field(default_factory=lambda: str(CACHE_DIR / "pc" / uuid4().hex))
     http_user_agent: str = "comc-scanner/0.3 (+https://github.com/matheuscllm-lgtm/scanner-comc)"
 
     cache_dir: Path = field(default=CACHE_DIR)
@@ -204,7 +205,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         max_pages_per_set=_get_int("MAX_PAGES_PER_SET", 0),
         tcgcsv_force_refresh=_get_bool("TCGCSV_FORCE_REFRESH", True),
         tcgdex_fallback=_get_bool("TCGDEX_FALLBACK", True),
-        pc_cache_dir=_get("PC_CACHE_DIR") or str(CACHE_DIR / "pc"),
+        pc_cache_dir=str(Path(_get("PC_CACHE_DIR") or CACHE_DIR / "pc") / uuid4().hex),
         http_user_agent=_get("HTTP_USER_AGENT")
         or "comc-scanner/0.3 (+https://github.com/matheuscllm-lgtm/scanner-comc)",
     )

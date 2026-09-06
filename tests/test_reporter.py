@@ -198,7 +198,7 @@ def test_legacy_row_with_profit_abs_only_renders_spread_column():
            "ref_source": "pricecharting", "confidence": 0.95, "ref_n_sales": 0,
            "comc_url": "https://www.comc.com/x", "ref_url": "https://www.pricecharting.com/y"}
     line = render_rows_table([row]).splitlines()[2]
-    assert line.startswith("| 1 | 30.74 | 44.39 | 69.25 | 99.99 | 30.74 | Luxray |")
+    assert line.startswith("| 1 | 30.74 | 44.39 | 69.25 | [99.99](https://www.pricecharting.com/y) | 30.74 | Luxray |")
     assert "MATCH_REVIEW · ref=coluna(antigo)" in line
 
 

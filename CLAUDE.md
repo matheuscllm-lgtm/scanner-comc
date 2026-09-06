@@ -1,3 +1,5 @@
+> **Regra vigente de entrega:** [DELIVERY_CHAT.md](DELIVERY_CHAT.md). Resultados somente no chat, referência clicável e coleta nova por solicitação; substitui orientações antigas de entrega via GitHub ou preços reutilizados.
+
 # CLAUDE.md — scanner-comc
 
 Instruções para qualquer sessão do Claude Code que trabalhe neste repositório
