@@ -238,8 +238,8 @@ def test_funnel_labels_new_keys_order_and_wording():
             < keys.index("below_discount"))
     assert labels["slab_no_reference"] == ("Slabs sem vendas comparáveis (mesma certificadora"
                                            "+nota+variante) — sem referência")
-    assert labels["skip_condition"] == ("Ignoradas: condição fora do permitido (WotC ≤2003 "
-                                        "NM/EX-NM; 2004+ NM; LP só com referência LP)")
+    assert labels["skip_condition"] == ("Ignoradas: condição fora do permitido (NM em todas as "
+                                        "eras; EX-NM vai para revisão sem preço; LP só com referência LP)")
     assert labels["lp_prefilter"] == ("Raw LP acima do pré-filtro (COMC > ref NM × "
                                       "(1 − desconto mín.))")
     assert labels["lp_no_reference"] == "Raw LP sem ≥3 vendas LP comparáveis — sem referência"

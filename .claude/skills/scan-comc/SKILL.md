@@ -20,7 +20,7 @@ REGRA VIGENTE DO OPERADOR: ler DELIVERY_CHAT.md na raiz do repositório. Entrega
 O catálogo validado (sets `validated: true` de `comc_scanner/comc_set_slugs.json`)
 está dividido em **12 grupos** (SV, WotC, EX, DP/Platinum, HGSS/BW, XY, SM, SWSH) — fonte canônica `comc_scanner/groups.py`
 (`python -m comc_scanner list-groups` lista sem rede). Cada set é varrido em
-**duas passadas**: cartas soltas (WotC ≤2003 NM ou EX-NM; 2004+ só NM; LP só com
+**duas passadas**: cartas soltas (NM em todas as eras; EX-NM vai para revisão sem preço; LP só com
 referência LP = mediana de ≥3 vendas "LP") e slabs (PSA 8-10, CGC 9-10 Gem/Pristine,
 BGS 9-10/Black Label, SGC 9-10, TAG 9.5/10 — referência = mediana de vendas da MESMA
 certificadora+nota+variante; coluna do PriceCharting nunca é referência). Só cartas de Pokémon da lista

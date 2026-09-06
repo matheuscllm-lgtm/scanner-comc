@@ -32,11 +32,12 @@ from pathlib import Path
 from comc_scanner import groups
 from comc_scanner.models import STATUS_OK
 from comc_scanner.ranking import sort_rows
-from comc_scanner.reporter import TRUST_CONFIDENCE, classify_row, funnel_lines, render_rows_table
+from comc_scanner.reporter import (EXTREME_DISCOUNT_PERCENT, TRUST_CONFIDENCE, classify_row,
+                                   funnel_lines, render_rows_table)
 
 CLEAN_TITLE = "## 🟢 Oportunidades OK (match confiável + preço de referência real)"
 REVIEW_TITLE = ("## ⚠️ MATCH_REVIEW — validar manualmente (confiança baixa, preço mid/low, "
-                "vendas<3 ou coluna÷vendas)")
+                "vendas<3, coluna÷vendas, TCG÷vendas-raw ou desconto extremo)")
 EMPTY_BUCKET = "_(nenhuma linha neste balde)_"
 
 
@@ -50,25 +51,34 @@ def _trust(payload: dict) -> float:
         return TRUST_CONFIDENCE
 
 
+def _extreme(payload: dict) -> int:
+    """Teto de desconto "bom demais" DO RUN (gravado no JSON); JSON antigo → default."""
+    try:
+        return int(payload.get("extreme_discount_percent", EXTREME_DISCOUNT_PERCENT))
+    except (TypeError, ValueError):
+        return EXTREME_DISCOUNT_PERCENT
+
+
 def split_buckets(payload: dict) -> tuple[list[dict], list[dict], int]:
     """(ok, review, n_low_confidence): OK = status OK pela mesma regra do reporter
     (com o `trust_confidence` do run); todo o resto (MATCH_REVIEW + balde
     low_confidence) vai para revisão — nunca é dropado. Ambos na ordem do ranking."""
-    trust = _trust(payload)
+    trust, extreme = _trust(payload), _extreme(payload)
     deals = list(payload.get("deals") or [])
     low_conf = list(payload.get("low_confidence") or [])
     ok: list[dict] = []
     review: list[dict] = []
     for row in deals:
-        status, _ = classify_row(row, trust=trust)
+        status, _ = classify_row(row, trust=trust, extreme_pct=extreme)
         (ok if status == STATUS_OK else review).append(row)
     review.extend(low_conf)
     return sort_rows(ok), sort_rows(review), len(low_conf)
 
 
-def _section(title: str, rows: list[dict], trust: float) -> list[str]:
+def _section(title: str, rows: list[dict], trust: float,
+             extreme: int = EXTREME_DISCOUNT_PERCENT) -> list[str]:
     lines = [title, ""]
-    lines.append(render_rows_table(rows, trust) if rows else EMPTY_BUCKET)
+    lines.append(render_rows_table(rows, trust, extreme) if rows else EMPTY_BUCKET)
     lines.append("")
     return lines
 
@@ -139,7 +149,8 @@ def sensitivity_counts(ok: list[dict], review: list[dict], thresholds: list[int]
 
 
 def sensitivity_sections(ok: list[dict], review: list[dict], thresholds: list[int],
-                         trust: float) -> list[str]:
+                         trust: float,
+                         extreme: int = EXTREME_DISCOUNT_PERCENT) -> list[str]:
     """Seções do modo diagnóstico: faixa operacional em 2 baldes (OK / MATCH_REVIEW) e
     cada faixa diagnóstica com TODAS as suas linhas (OK e MATCH_REVIEW juntas, status
     na coluna), sempre via `render_rows_table` — nunca tabela à mão."""
@@ -147,13 +158,13 @@ def sensitivity_sections(ok: list[dict], review: list[dict], thresholds: list[in
     for lo, hi in sensitivity_bands(thresholds):
         if hi is None:
             lines += _section(f"## 🟢 ≥{lo}% — candidato comercial (sujeito às demais validações)",
-                              [r for r in ok if _in_band(r, lo, hi)], trust)
+                              [r for r in ok if _in_band(r, lo, hi)], trust, extreme)
             lines += _section(f"## ⚠️ ≥{lo}% — MATCH_REVIEW",
-                              [r for r in review if _in_band(r, lo, hi)], trust)
+                              [r for r in review if _in_band(r, lo, hi)], trust, extreme)
         else:
             rows = sort_rows([r for r in ok + review if _in_band(r, lo, hi)])
             lines += _section(f"## 🔬 Diagnóstico {lo}–{_pct_br(hi - 0.01)}% — NÃO é oportunidade",
-                              rows, trust)
+                              rows, trust, extreme)
     return lines
 
 
@@ -182,7 +193,7 @@ def build_markdown(payload: dict, group: int | None = None,
     warning = _top_n_warning(payload)
     if warning:
         header.append(warning)
-    trust = _trust(payload)
+    trust, extreme = _trust(payload), _extreme(payload)
     if sensitivity:
         operational = max(sensitivity)
         header.append(f"- Modo diagnóstico: scan com desconto mínimo {min_discount}% · "
@@ -199,13 +210,14 @@ def build_markdown(payload: dict, group: int | None = None,
         header.append("")
         header.extend(sensitivity_counts(ok, review, sensitivity))
         header.append("")
-        body = sensitivity_sections(ok, review, sensitivity, trust)
+        body = sensitivity_sections(ok, review, sensitivity, trust, extreme)
     else:
         header.append("")
-        body = _section(CLEAN_TITLE, ok, trust) + _section(REVIEW_TITLE, review, trust)
+        body = (_section(CLEAN_TITLE, ok, trust, extreme)
+                + _section(REVIEW_TITLE, review, trust, extreme))
     unpriced = payload.get("unpriced_review") or []
     if unpriced:
-        body += _section("## 🔎 Revisão sem referência — não são oportunidades aprovadas", unpriced, trust)
+        body += _section("## 🔎 Revisão sem referência — não são oportunidades aprovadas", unpriced, trust, extreme)
     coverage = payload.get("coverage") or {}
     for scope, info in coverage.items():
         missing = info.get("without_validated_path") or []
@@ -217,7 +229,10 @@ def build_markdown(payload: dict, group: int | None = None,
         f"_MATCH_REVIEW = confiança de match < {trust:.2f}, preço de referência "
         "mid/low (fallback do TCGplayer, não é venda real), `vendas<3` (mediana com só "
         "1–2 vendas comparáveis) ou `coluna÷vendas` (coluna informativa do PriceCharting "
-        ">30% longe da mediana de vendas) — conferir manualmente antes de qualquer "
+        ">30% longe da mediana de vendas), `TCG÷vendas-raw` (raw NM: TCGplayer market >40% "
+        "longe da mediana de vendas de carta solta no PriceCharting — só plausibilidade, o "
+        "preço não muda) ou `desconto-extremo` (desconto ≥ teto do run: bom demais, "
+        "revisar) — conferir manualmente antes de qualquer "
         "decisão. `baixa-liquidez(365d)` é nota, não muda o status: ≥3 vendas só em 365 "
         "dias (não em 180). "
         "`PC vendas <nota|LP> (n=…, mês..mês)` = mediana de ≥3 vendas concluídas da mesma "

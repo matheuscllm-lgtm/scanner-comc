@@ -141,6 +141,12 @@ class Settings:
     scan_interval_s: int = 3600          # flush parcial (~hora)
     min_match_confidence: float = 0.80   # abaixo disto vai para o balde low-confidence
     trust_confidence: float = 0.90       # abaixo disto = MATCH_REVIEW
+    # Sinalização (2026-09-06) — nunca muda o preço, só manda para MATCH_REVIEW:
+    # desconto ≥ extreme_discount_percent = "bom demais" (variante/condição errada?);
+    # raw_plausibility = compara o TCGplayer market com a mediana de vendas de carta
+    # solta no PriceCharting (divergência > RAW_SALES_DEVIATION_MAX → revisão).
+    extreme_discount_percent: int = 60   # 0 desliga
+    raw_plausibility: bool = True
 
     # --- Eras ---
     default_era: str = "all"
@@ -198,6 +204,8 @@ def load_settings(env_file: Path | None = None) -> Settings:
         scan_interval_s=_get_int("SCAN_INTERVAL_SECONDS", 3600),
         min_match_confidence=_get_float("MIN_MATCH_CONFIDENCE", 0.80),
         trust_confidence=_get_float("TRUST_CONFIDENCE", 0.90),
+        extreme_discount_percent=max(0, _get_int("EXTREME_DISCOUNT_PERCENT", 60)),
+        raw_plausibility=_get_bool("RAW_PLAUSIBILITY", True),
         default_era=(_get("DEFAULT_ERA", "all") or "all").lower(),
         era_vintage_max_year=_get_int("ERA_VINTAGE_MAX_YEAR", 2003),
         era_middle_max_year=_get_int("ERA_MIDDLE_MAX_YEAR", 2019),

@@ -10,7 +10,7 @@ Tipo | Ref | Conf | Status | Links
 - `Desconto%` = (ref − COMC)/ref; `Spread$` = ref − COMC (bruto, sem taxas);
   `ROI bruto%` = spread/COMC (nomenclatura do operador, 2026-09-02);
 - `Carta` = nome + número de coleção ("Pikachu 173/165");
-- `Tipo` = "Raw NM" / "Raw EX-NM" / "Raw LP" ou o rótulo da nota do slab ("PSA 10",
+- `Tipo` = "Raw NM" / "Raw LP" (EX-NM só na revisão sem preço) ou o rótulo da nota do slab ("PSA 10",
   "CGC 10 Pristine", "BGS 10 Black Label");
 - `Ref` = de onde veio o preço de referência: "TCG market|mid|low" (TCGplayer via
   tcgcsv, raw NM) ou "PC vendas <nota|LP> (n=…, mês..mês)" (PriceCharting: mediana
@@ -51,6 +51,12 @@ MIN_COMPARABLE_SALES = 3
 # Coluna exata do PriceCharting (informativa) mais longe que isto da mediana de vendas
 # → sanidade falhou → revisar.
 COLUMN_DEVIATION_MAX = 0.30
+# Referência raw NM (TCGplayer market) mais longe que isto da mediana de vendas de carta
+# solta no PriceCharting → plausibilidade falhou → revisar (o preço NÃO muda).
+RAW_SALES_DEVIATION_MAX = 0.40
+# Desconto (%) a partir do qual a linha é "boa demais": vai para MATCH_REVIEW, nunca é
+# descartada (0 desliga). O run grava o valor usado no JSON (`extreme_discount_percent`).
+EXTREME_DISCOUNT_PERCENT = 60
 
 _SALES_SOURCE_PREFIX = "pricecharting-sales"   # "pricecharting-sales" | "pricecharting-sales-lp"
 _LEGACY_COLUMN_SOURCE = "pricecharting"        # JSON antigo: coluna do PC como referência
@@ -84,8 +90,8 @@ FUNNEL_LABELS = [
     ("skip_raw_in_slab", "Ignoradas: solta na passada de slabs"),
     ("skip_grade_unparsed", "Ignoradas: nota do slab não reconhecida"),
     ("skip_grade_out_of_scope", "Ignoradas: nota fora do escopo"),
-    ("skip_condition", "Ignoradas: condição fora do permitido (WotC ≤2003 NM/EX-NM; "
-                       "2004+ NM; LP só com referência LP)"),
+    ("skip_condition", "Ignoradas: condição fora do permitido (NM em todas as eras; "
+                       "EX-NM vai para revisão sem preço; LP só com referência LP)"),
     ("skip_language", "Ignoradas: idioma ≠ inglês"),
     ("skip_price_floor", "Ignoradas: abaixo do piso US$"),
     ("skip_price_ceiling", "Ignoradas: acima do teto US$ (--max-price)"),
@@ -103,6 +109,9 @@ FUNNEL_LABELS = [
     ("below_discount", "Descartadas: desconto abaixo do mínimo"),
     ("pc_link_missing", "Raw aprovadas sem página no PriceCharting (link [referência] = TCGplayer)"),
     ("pc_link_error", "Raw aprovadas com ERRO na fonte PriceCharting ao buscar o link (= TCGplayer)"),
+    ("raw_plausibility_ok", "Raw aprovadas com plausibilidade (mediana de vendas de carta solta) calculada"),
+    ("raw_plausibility_missing", "Raw aprovadas sem ≥3 vendas de carta solta para plausibilidade"),
+    ("raw_plausibility_error", "Raw aprovadas com ERRO na fonte PriceCharting na plausibilidade"),
     ("ok", "Aprovadas OK (antes da dedupe)"),
     ("review", "Aprovadas MATCH_REVIEW (antes da dedupe)"),
     ("low_confidence", "Balde low-confidence (antes da dedupe)"),
@@ -147,7 +156,8 @@ def _float_or_none(value: object) -> float | None:
         return None
 
 
-def classify_row(row: dict, trust: float = TRUST_CONFIDENCE) -> tuple[str, list[str]]:
+def classify_row(row: dict, trust: float = TRUST_CONFIDENCE,
+                 extreme_pct: int = EXTREME_DISCOUNT_PERCENT) -> tuple[str, list[str]]:
     """(status, motivos) de uma linha. OK só quando: confiança ≥ trust E a referência é
     (raw NM) preço 'market' real do TCGplayer, ou (slab/LP) mediana de ≥3 vendas
     comparáveis cuja coluna informativa (se houver) não destoa >30%.
@@ -158,7 +168,10 @@ def classify_row(row: dict, trust: float = TRUST_CONFIDENCE) -> tuple[str, list[
     - `preço:mid|low`    — TCGplayer sem preço market (fallback, não é venda real);
     - `vendas<3(n=…)`    — mediana com 1–2 vendas ("thin"); n ausente = desconhecido, não flaga;
     - `coluna÷vendas(c)` — coluna exata do PC >30% longe da mediana de vendas;
-    - `ref~proxy` / `ref=coluna(antigo)` — JSON gravado antes da PR A (formato antigo).
+    - `ref~proxy` / `ref=coluna(antigo)` — JSON gravado antes da PR A (formato antigo);
+    - `TCG÷vendas-raw(m)`  — raw NM: TCGplayer market >40% longe da mediana de vendas de
+      carta solta (plausibilidade; o preço NÃO é trocado);
+    - `desconto-extremo(≥N%)` — desconto ≥ `extreme_pct`: bom demais, revisar (nunca descartar).
     Baixa liquidez (≥3 vendas só em 365 dias) NÃO entra aqui — é nota (`row_notes`).
     """
     reasons: list[str] = []
@@ -196,6 +209,13 @@ def classify_row(row: dict, trust: float = TRUST_CONFIDENCE) -> tuple[str, list[
         reasons.append("ref~proxy")
     elif source == _LEGACY_COLUMN_SOURCE:
         reasons.append("ref=coluna(antigo)")
+    raw_med = _float_or_none(row.get("raw_sales_median"))
+    if source == "tcgplayer" and raw_med and ref > 0 and \
+            abs(ref - raw_med) / ref > RAW_SALES_DEVIATION_MAX:
+        reasons.append(f"TCG÷vendas-raw({raw_med:.2f})")
+    disc = _float_or_none(row.get("margin_pct"))
+    if extreme_pct and disc is not None and disc >= extreme_pct:
+        reasons.append(f"desconto-extremo(≥{int(extreme_pct)}%)")
     return (STATUS_REVIEW if reasons else STATUS_OK), reasons
 
 
@@ -208,8 +228,9 @@ def row_notes(row: dict) -> list[str]:
     return notes
 
 
-def _status_cell(row: dict, trust: float = TRUST_CONFIDENCE) -> str:
-    status, reasons = classify_row(row, trust=trust)
+def _status_cell(row: dict, trust: float = TRUST_CONFIDENCE,
+                 extreme_pct: int = EXTREME_DISCOUNT_PERCENT) -> str:
+    status, reasons = classify_row(row, trust=trust, extreme_pct=extreme_pct)
     return " · ".join([status, *reasons, *row_notes(row)])
 
 
@@ -266,7 +287,8 @@ def table_header_lines() -> list[str]:
     return [header, sep]
 
 
-def render_row_line(row: dict, rank: int, trust: float = TRUST_CONFIDENCE) -> str:
+def render_row_line(row: dict, rank: int, trust: float = TRUST_CONFIDENCE,
+                    extreme_pct: int = EXTREME_DISCOUNT_PERCENT) -> str:
     """One canonical table line from a flat deal row (Deal.as_row() or the same
     dict re-read from the Reporter JSON/CSV). `trust` = the run's TRUST_CONFIDENCE
     (gravado no JSON) so the delivery never re-classifies with a different bar.
@@ -275,7 +297,7 @@ def render_row_line(row: dict, rank: int, trust: float = TRUST_CONFIDENCE) -> st
     row["rank"] = rank
     if "spread_abs" not in row and "profit_abs" in row:
         row["spread_abs"] = row["profit_abs"]
-    row["status"] = _status_cell(row, trust)
+    row["status"] = _status_cell(row, trust, extreme_pct)
     row["ref_label"] = _ref_label(row)
     row["links"] = _links_cell(row)
     row["seller"] = row.get("seller") or "não identificado"
@@ -284,20 +306,22 @@ def render_row_line(row: dict, rank: int, trust: float = TRUST_CONFIDENCE) -> st
     return "| " + " | ".join(_cell(k, row.get(k, "")) for k, _ in _TABLE_COLS) + " |"
 
 
-def render_rows_table(rows: list[dict], trust: float = TRUST_CONFIDENCE) -> str:
+def render_rows_table(rows: list[dict], trust: float = TRUST_CONFIDENCE,
+                      extreme_pct: int = EXTREME_DISCOUNT_PERCENT) -> str:
     lines = table_header_lines()
-    lines.extend(render_row_line(row, rank, trust) for rank, row in enumerate(rows, 1))
+    lines.extend(render_row_line(row, rank, trust, extreme_pct) for rank, row in enumerate(rows, 1))
     return "\n".join(lines)
 
 
 def render_markdown(deals: list[Deal], label: str, top_n: int,
-                    trust: float = TRUST_CONFIDENCE) -> str:
+                    trust: float = TRUST_CONFIDENCE,
+                    extreme_pct: int = EXTREME_DISCOUNT_PERCENT) -> str:
     title = (f"### COMC deals — {label} — top {min(len(deals), top_n) if top_n else len(deals)} "
              "(ROI bruto → desconto → spread)")
     if not deals:
         return title + "\n\n_(nenhum deal acima do limiar ainda)_"
     rows = sort_rows([d.as_row() for d in deals])[:top_n or None]
-    return "\n".join([title, "", render_rows_table(rows, trust)])
+    return "\n".join([title, "", render_rows_table(rows, trust, extreme_pct)])
 
 
 class Reporter:
@@ -353,6 +377,8 @@ class Reporter:
             "graded_allow": sorted(self.settings.graded_allow),
             "iconic_only": self.settings.iconic_only,
             "trust_confidence": self.settings.trust_confidence,
+            "extreme_discount_percent": self.settings.extreme_discount_percent,
+            "raw_plausibility": self.settings.raw_plausibility,
             "top_n": self.settings.top_n,
             "count": len(rows),
             "funnel": dict(stats or {}),
@@ -366,7 +392,8 @@ class Reporter:
         self._write_json(payload, rdir / f"comc_deals_{label}_{stamp}.json")
 
         table = render_markdown(deals, label, self.settings.top_n,
-                                trust=self.settings.trust_confidence)
+                                trust=self.settings.trust_confidence,
+                                extreme_pct=self.settings.extreme_discount_percent)
         print("\n" + table + "\n")
         if stats:
             print("Funil: " + " · ".join(funnel_lines(stats)) + "\n")

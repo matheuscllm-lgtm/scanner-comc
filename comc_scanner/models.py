@@ -92,7 +92,7 @@ class Deal:
     era: str = ""
     pokemon: str = ""             # Pokémon icônico casado (lista do operador)
     pokemon_rank: int = UNRANKED
-    # "tcgplayer" (raw NM/EX-NM) | "pricecharting-sales" (slab: mediana de vendas da
+    # "tcgplayer" (raw NM) | "pricecharting-sales" (slab: mediana de vendas da
     # mesma certificadora+nota+variante) | "pricecharting-sales-lp" (raw LP: mediana de
     # vendas LP). Valores antigos ("pricecharting" = coluna, "pricecharting-proxy") só
     # aparecem em JSON gravado antes da PR A — a entrega os lê e marca como antigos.
@@ -103,6 +103,12 @@ class Deal:
     ref_liquidity: str = ""       # "ok" (≥3 em 180d) | "low" (≥3 só em 365d) | "thin" (1–2)
     ref_window_days: int = 0      # janela da referência: 180 | 365 (0 = não se aplica)
     ref_column_price: float | None = None  # coluna exata do PC (só informativa/sanidade)
+    # Plausibilidade da referência raw NM (2026-09-06): mediana de vendas de carta solta
+    # no PriceCharting — SÓ sinal (divergência > RAW_SALES_DEVIATION_MAX → MATCH_REVIEW);
+    # nunca substitui o TCGplayer market. None = sem amostra/desligado.
+    raw_sales_median: float | None = None
+    raw_sales_n: int = 0
+    raw_sales_label: str = ""
     status: str = STATUS_OK       # OK | MATCH_REVIEW (match/preço não confiável o bastante)
     review_reasons: tuple[str, ...] = ()
 
@@ -145,6 +151,9 @@ class Deal:
             "ref_liquidity": self.ref_liquidity,
             "ref_window_days": self.ref_window_days,
             "ref_column_price": self.ref_column_price,
+            "raw_sales_median": self.raw_sales_median,
+            "raw_sales_n": self.raw_sales_n,
+            "raw_sales_label": self.raw_sales_label,
             "era": self.era,
             "confidence": round(self.match_confidence, 2),
             "match_reason": self.match_reason,
