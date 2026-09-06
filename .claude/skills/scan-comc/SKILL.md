@@ -9,6 +9,8 @@ description: >-
   ele quer.
 ---
 
+REGRA VIGENTE 2026-09-06: ler ACQUISITION_POLICY.md na raiz. Todos os Pokémon e eras por padrão; NM/LP com referências próprias, EX-NM em revisão sem preço presumido; entrega completa. Substitui regras históricas conflitantes abaixo.
+
 REGRA VIGENTE DO OPERADOR: ler DELIVERY_CHAT.md na raiz do repositório. Entrega somente no chat, preço de referência clicável, coleta nova sob demanda; não executar scans no GitHub Actions nem publicar resultados. Esta regra substitui instruções antigas conflitantes abaixo.
 
 

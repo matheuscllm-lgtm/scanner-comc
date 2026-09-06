@@ -70,6 +70,8 @@ _TABLE_COLS = [
     ("ref_label", "Ref"),
     ("confidence", "Conf"),
     ("status", "Status"),
+    ("seller", "Vendedor"),
+    ("acquisition_review", "Revisão aquisição"),
     ("links", "Links"),
 ]
 _MAXW = {"card_number": 34, "set": 26, "listing_type": 20, "pokemon": 14}
@@ -88,6 +90,7 @@ FUNNEL_LABELS = [
     ("skip_price_floor", "Ignoradas: abaixo do piso US$"),
     ("skip_price_ceiling", "Ignoradas: acima do teto US$ (--max-price)"),
     ("skip_not_iconic", "Ignoradas: Pokémon fora da lista"),
+    ("condition_review", "EX-NM separadas para revisão sem preço presumido"),
     ("match_failed", "Matches rejeitados (carta não identificada)"),
     ("skip_rarity", "Ignoradas: raridade (chase-only)"),
     ("slab_no_reference", "Slabs sem vendas comparáveis (mesma certificadora+nota+variante) "
@@ -159,6 +162,10 @@ def classify_row(row: dict, trust: float = TRUST_CONFIDENCE) -> tuple[str, list[
     Baixa liquidez (≥3 vendas só em 365 dias) NÃO entra aqui — é nota (`row_notes`).
     """
     reasons: list[str] = []
+    if row.get("unpriced_reason"):
+        reasons.append(str(row["unpriced_reason"]))
+    if _source(row) == "tcgplayer" and str(row.get("condition") or "").strip().lower() == "ex-nm":
+        reasons.append("EX-NM≠NM")
     try:
         conf = float(row.get("confidence") or 0.0)
     except (TypeError, ValueError):
@@ -210,6 +217,8 @@ def _ref_label(row: dict) -> str:
     """Coluna `Ref`: "PC vendas PSA 9 (n=5, 2026-03..2026-08)" / "PC vendas LP (n=4, …)"
     (mediana de vendas), "TCG market|mid|low" (TCGplayer) ou, em JSON antigo,
     "PC coluna PSA 10 (antigo)" / "PC GRADE 9.5~ (antigo)"."""
+    if row.get("unpriced_reason"):
+        return "Sem referência equivalente"
     field = _price_field(row)
     source = _source(row)
     if source.startswith(_SALES_SOURCE_PREFIX):
@@ -269,6 +278,8 @@ def render_row_line(row: dict, rank: int, trust: float = TRUST_CONFIDENCE) -> st
     row["status"] = _status_cell(row, trust)
     row["ref_label"] = _ref_label(row)
     row["links"] = _links_cell(row)
+    row["seller"] = row.get("seller") or "não identificado"
+    row["acquisition_review"] = row.get("acquisition_review") or "fotos/condição, vendedor e custos pendentes"
     row["tcg_reference"] = reference_price(row.get("tcg_reference"), row.get("tcg_url") if _source(row) == "tcgplayer" else row.get("ref_url") or row.get("tcg_url"))
     return "| " + " | ".join(_cell(k, row.get(k, "")) for k, _ in _TABLE_COLS) + " |"
 
@@ -281,18 +292,34 @@ def render_rows_table(rows: list[dict], trust: float = TRUST_CONFIDENCE) -> str:
 
 def render_markdown(deals: list[Deal], label: str, top_n: int,
                     trust: float = TRUST_CONFIDENCE) -> str:
-    title = (f"### COMC deals — {label} — top {min(len(deals), top_n)} "
+    title = (f"### COMC deals — {label} — top {min(len(deals), top_n) if top_n else len(deals)} "
              "(ROI bruto → desconto → spread)")
     if not deals:
         return title + "\n\n_(nenhum deal acima do limiar ainda)_"
-    rows = sort_rows([d.as_row() for d in deals])[:top_n]
+    rows = sort_rows([d.as_row() for d in deals])[:top_n or None]
     return "\n".join([title, "", render_rows_table(rows, trust)])
 
 
 class Reporter:
     def __init__(self, settings: Settings):
         self.settings = settings
+        self.unpriced: dict[str, dict] = {}
+        self.coverage: dict[str, dict] = {}
         self.settings.results_dir.mkdir(parents=True, exist_ok=True)
+
+    def add_unpriced(self, listing, reason: str) -> None:
+        reason = reason.replace("no_reference", "sem vendas comparáveis suficientes").replace("pc_error", "fonte de vendas indisponível").replace("malformed", "nota não reconhecida")
+        self.unpriced[listing.url] = {
+            "card_number": f"{listing.raw_name} {listing.number_hint or ''}".strip(),
+            "set": listing.set_hint or "", "condition": listing.condition,
+            "listing_type": listing.grade or f"Raw {listing.condition}",
+            "comc_price": listing.price, "tcg_reference": None,
+            "margin_pct": None, "roi_pct": None, "spread_abs": None,
+            "ref_source": "unavailable", "ref_url": "", "tcg_url": "",
+            "confidence": None, "unpriced_reason": reason, "comc_url": listing.url,
+            "seller": listing.seller, "image_url": listing.image_url,
+            "acquisition_review": "fotos/condição, vendedor e custos pendentes" + ("; população não verificada" if listing.graded else ""),
+        }
 
     @staticmethod
     def _write_csv(rows: list[dict], path: Path) -> None:
@@ -311,7 +338,7 @@ class Reporter:
     def flush(self, deals: list[Deal], label: str, low_confidence: list[Deal] | None = None,
               stats: dict | None = None) -> str:
         """Write latest + timestamped CSV/JSON and print the markdown table."""
-        rows = sort_rows([d.as_row() for d in deals])[: self.settings.top_n]
+        rows = sort_rows([d.as_row() for d in deals])[: self.settings.top_n or None]
         rows = [{"rank": i, **r} for i, r in enumerate(rows, 1)]
         stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
         rdir = self.settings.results_dir
@@ -330,6 +357,9 @@ class Reporter:
             "count": len(rows),
             "funnel": dict(stats or {}),
             "deals": rows,
+            "unpriced_review": list(self.unpriced.values()),
+            "coverage": self.coverage,
+            "scan_raw": self.settings.scan_raw, "scan_slabs": self.settings.scan_slabs,
             "low_confidence": sort_rows([d.as_row() for d in (low_confidence or [])]),
         }
         self._write_json(payload, rdir / f"comc_deals_{label}_latest.json")

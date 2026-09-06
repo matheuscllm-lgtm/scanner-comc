@@ -64,10 +64,10 @@ def _payload():
 
 
 def _table_lines(md: str) -> list[str]:
-    """Só as linhas de DEAL (14 colunas = 15 pipes); exclui cabeçalho/separador e a
+    """Só as linhas de DEAL (16 colunas = 17 pipes); exclui cabeçalho/separador e a
     tabela de contagens do modo diagnóstico (4 colunas)."""
     return [ln for ln in md.splitlines()
-            if ln.startswith("|") and ln.count("|") == 15
+            if ln.startswith("|") and ln.count("|") == 17
             and "---" not in ln and "Desconto%" not in ln]
 
 
@@ -104,7 +104,7 @@ def test_header_counts_scope_funnel_and_thresholds():
     assert "grupo 1" in md
     assert "OK: 1 · MATCH_REVIEW: 3 (sendo 1 do balde low-confidence)" in md
     assert "Desconto mínimo: 20%" in md and "piso US$10.0" in md
-    assert "raw NM (WotC ≤2003: NM/EX-NM; LP só com referência LP)" in md
+    assert "raw NM; EX-NM separada para revisão; LP só com referência LP" in md
     assert "Slabs aceitos: BGS 10, PSA 10" in md
     assert "Listagens analisadas: 500" in md and "Pokémon fora da lista: 300" in md
 

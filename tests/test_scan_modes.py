@@ -57,9 +57,9 @@ def test_condition_filter_is_strict_nm_by_default():
         assert sc._condition_ok(_listing(bad)) is False, bad
 
 
-def test_condition_allowlist_is_configurable():
+def test_old_allowlist_cannot_promote_exnm_to_nm():
     sc = Scanner(_settings(comc_condition_allow=("nm", "ex-nm")))
-    assert sc._condition_ok(_listing("EX-NM")) is True
+    assert sc._condition_ok(_listing("EX-NM")) is False
 
 
 def test_variant_filter_drops_foreign_language_printings():

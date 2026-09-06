@@ -13,6 +13,13 @@ from .pipeline import Scanner
 log = logging.getLogger("comc_scanner.cli")
 
 
+def _nonnegative(value: str) -> int:
+    number = int(value)
+    if number < 0:
+        raise argparse.ArgumentTypeError("use 0 para todos ou um limite positivo")
+    return number
+
+
 def _add_scan_args(p: argparse.ArgumentParser) -> None:
     sel = p.add_mutually_exclusive_group()
     sel.add_argument("--group", help="grupo canônico 1-12 (ver `list-groups`) ou `all` "
@@ -27,11 +34,13 @@ def _add_scan_args(p: argparse.ArgumentParser) -> None:
                    help="teto de orçamento por carta em US$ (corta antes do PriceCharting); 0=sem teto")
     p.add_argument("--max-english", type=int,
                    help="encerra cada set/passada após N listagens INGLESAS válidas (0=todas)")
-    p.add_argument("--top-n", type=int, help="máximo de deals gravados/reportados")
+    p.add_argument("--top-n", type=_nonnegative, help="máximo de deals gravados/reportados; 0 = todos (default)")
     scope = p.add_mutually_exclusive_group()
     scope.add_argument("--raw-only", action="store_true", help="só cartas soltas NM")
     scope.add_argument("--slabs-only", action="store_true", help="só cartas gradadas")
-    p.add_argument("--all-pokemon", action="store_true",
+    pokemon = p.add_mutually_exclusive_group()
+    pokemon.add_argument("--iconic-only", action="store_true", help="restringe à lista icônica (opcional)")
+    pokemon.add_argument("--all-pokemon", action="store_true",
                    help="desliga o filtro de Pokémon icônicos (analisa todas as cartas)")
     p.add_argument("--chase-only", action="store_true",
                    help="só raridades de perseguição (dropa Common/Uncommon/Rare)")
@@ -94,6 +103,8 @@ def _apply_overrides(settings, args) -> None:
         settings.scan_raw = False
     if getattr(args, "all_pokemon", False):
         settings.iconic_only = False
+    if getattr(args, "iconic_only", False):
+        settings.iconic_only = True
     settings.comc_headless = False  # Cloudflare da COMC só limpa em navegador com janela
 
 
@@ -166,7 +177,6 @@ def main(argv: list[str] | None = None) -> int:
     scanner = Scanner(settings)
     if groups is None:
         era = _resolve_era(args, settings)
-        era = era if era != "all" else "vintage"
         scanner.run_scan(era, label=era)
         return 2 if scanner.aborted else 0
     label = "all" if len(groups) > 1 else f"grupo{groups[0]}"

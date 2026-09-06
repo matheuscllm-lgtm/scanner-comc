@@ -171,8 +171,8 @@ def build_markdown(payload: dict, group: int | None = None,
         f"- OK: {len(ok)} · MATCH_REVIEW: {len(review)} (sendo {n_low} do balde low-confidence)"
         + (" — todas as faixas; contagem por limiar abaixo" if sensitivity else ""),
         f"- Desconto mínimo: {min_discount}% · piso US$"
-        f"{payload.get('min_comc_price', '?')} · raw NM (WotC ≤2003: NM/EX-NM; LP só com "
-        f"referência LP) · só inglês · "
+        f"{payload.get('min_comc_price', '?')} · raw NM; EX-NM separada para revisão; LP só com "
+        f"referência LP · só inglês · "
         f"Pokémon: {'lista icônica' if payload.get('iconic_only', True) else 'todos'}",
         f"- Slabs aceitos: {', '.join(graded) if graded else '—'}",
     ]
@@ -203,7 +203,17 @@ def build_markdown(payload: dict, group: int | None = None,
     else:
         header.append("")
         body = _section(CLEAN_TITLE, ok, trust) + _section(REVIEW_TITLE, review, trust)
+    unpriced = payload.get("unpriced_review") or []
+    if unpriced:
+        body += _section("## 🔎 Revisão sem referência — não são oportunidades aprovadas", unpriced, trust)
+    coverage = payload.get("coverage") or {}
+    for scope, info in coverage.items():
+        missing = info.get("without_validated_path") or []
+        if missing:
+            body.extend([f"Cobertura {scope}: {len(missing)} sets sem caminho COMC validado: " + ", ".join(missing), ""])
     footer = [
+        "_OK valida a correspondência e a referência de preço; aquisição continua pendente de fotos, condição física, vendedor e custos. População não é verificada automaticamente. Valores são brutos._",
+        "",
         f"_MATCH_REVIEW = confiança de match < {trust:.2f}, preço de referência "
         "mid/low (fallback do TCGplayer, não é venda real), `vendas<3` (mediana com só "
         "1–2 vendas comparáveis) ou `coluna÷vendas` (coluna informativa do PriceCharting "

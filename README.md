@@ -1,3 +1,5 @@
+REGRA VIGENTE 2026-09-06: ler ACQUISITION_POLICY.md na raiz. Todos os Pokémon e eras por padrão; NM/LP com referências próprias, EX-NM em revisão sem preço presumido; entrega completa. Substitui regras históricas conflitantes abaixo.
+
 > **Regra vigente de entrega:** [DELIVERY_CHAT.md](DELIVERY_CHAT.md). Resultados somente no chat, referência clicável e coleta nova por solicitação; substitui orientações antigas de entrega via GitHub ou preços reutilizados.
 
 # price-compare

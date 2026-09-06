@@ -93,7 +93,7 @@ class BestDeals:
         return self._ranked(list(self.best.values()))
 
     def low_conf(self) -> list[Deal]:
-        return self._ranked(list(self.low.values()))[: self.top_n]
+        return self._ranked(list(self.low.values()))[: self.top_n or None]
 
 
 def _grade_from_key(key: str | None) -> Grade | None:
@@ -340,7 +340,7 @@ class Scanner:
         cond = (listing.condition or "").strip().lower()
         allow = (self.settings.comc_condition_allow_vintage if era == "vintage"
                  else self.settings.comc_condition_allow)
-        return cond in allow
+        return cond == "nm" and cond in allow
 
     def _variant_ok(self, listing) -> bool:
         """English-only: drop foreign-language sub-printings (Japanese/Korean/...)."""
@@ -456,6 +456,7 @@ class Scanner:
         st = stats if stats is not None else self.stats
         st.bump("seen")
         lp_candidate = False
+        condition_review = kind == KIND_RAW and not listing.graded and (listing.condition or "").strip().lower() == "ex-nm"
         if kind == KIND_RAW:
             if listing.graded:
                 st.bump("skip_graded_in_raw")
@@ -463,7 +464,9 @@ class Scanner:
             if not self._condition_ok(listing, era):
                 # LP só segue no funil para buscar a SUA referência (vendas LP); nunca
                 # é comparada com o preço NM.
-                if self._is_lp(listing):
+                if condition_review:
+                    pass  # sem preço NM/LP: vai para revisão após os filtros básicos
+                elif self._is_lp(listing):
                     lp_candidate = True
                 else:
                     st.bump("skip_condition")
@@ -491,9 +494,14 @@ class Scanner:
         if s.iconic_only and hit is None:
             st.bump("skip_not_iconic")
             return None
+        if condition_review:
+            st.bump("condition_review")
+            self.reporter.add_unpriced(listing, "EX-NM: condição exige revisão; sem referência equivalente")
+            return None
         deal = match(listing, index, s, context_set_key=ctx)
         if deal is None:
             st.bump("match_failed")
+            self.reporter.add_unpriced(listing, "carta/variante sem identificação segura no catálogo")
             return None
         if not self._chase_ok(deal.product):
             st.bump("skip_rarity")
@@ -507,6 +515,7 @@ class Scanner:
         if kind == KIND_SLAB:
             outcome = self._slab_reference(deal)
             if outcome != "ok":
+                self.reporter.add_unpriced(listing, "slab: " + outcome)
                 st.bump({"no_reference": "slab_no_reference", "pc_error": "slab_pc_error",
                          "malformed": "slab_grade_malformed"}[outcome])
                 return None
@@ -520,6 +529,7 @@ class Scanner:
                 return None
             outcome = self._lp_reference(deal)
             if outcome != "ok":
+                self.reporter.add_unpriced(listing, "LP: " + outcome)
                 st.bump({"no_reference": "lp_no_reference", "pc_error": "lp_pc_error"}[outcome])
                 return None
         if deal.margin < s.min_gross_margin:
@@ -581,6 +591,11 @@ class Scanner:
             ts = by_norm.get(normalize_set(tcg_name)) or amap.get(normalize_set(tcg_name))
             if ts is not None:
                 targets.append((ts, str(info.get("year", "")), info["slug"]))
+        selected = {t[0].group_id for t in targets}
+        missing = [ts.name for ts in all_sets if ts.group_id not in selected]
+        self.reporter.coverage[era] = {"selected_sets": [t[0].name for t in targets], "without_validated_path": missing}
+        if missing:
+            log.warning("Cobertura parcial do catálogo: %d sets sem caminho COMC validado.", len(missing))
         return targets
 
     def run_scan(self, era: str, label: str, best: BestDeals | None = None) -> BestDeals:

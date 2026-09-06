@@ -78,7 +78,7 @@ def test_discount_below_20_is_discarded(index):
 
 
 def test_raw_filters_condition_language_price_iconic(index):
-    sc = pl.Scanner(_settings())
+    sc = pl.Scanner(_settings(iconic_only=True))
     assert sc.process_listing(_raw("Charizard ex", "006", 60.0, cond="EX-NM"),
                               index, CTX, pl.KIND_RAW) is None
     assert sc.process_listing(_raw("Charizard ex", "006", 60.0,
@@ -86,7 +86,7 @@ def test_raw_filters_condition_language_price_iconic(index):
                               index, CTX, pl.KIND_RAW) is None
     assert sc.process_listing(_raw("Charizard ex", "006", 5.0), index, CTX, pl.KIND_RAW) is None
     assert sc.process_listing(_raw("Pidgeotto", "017", 20.0), index, CTX, pl.KIND_RAW) is None
-    assert sc.stats["skip_condition"] == 1 and sc.stats["skip_language"] == 1
+    assert sc.stats["condition_review"] == 1 and sc.stats["skip_language"] == 1
     assert sc.stats["skip_price_floor"] == 1 and sc.stats["skip_not_iconic"] == 1
     # --all-pokemon desliga o filtro
     sc2 = pl.Scanner(_settings(iconic_only=False))

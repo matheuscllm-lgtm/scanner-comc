@@ -106,10 +106,10 @@ class Settings:
     comc_seller_repo: str = ""           # "" = all repos; "COMC" = RCR only (empty for vintage)
     # Condição aceita por ERA (match EXATO contra a lista; nunca substring). COMC's g-band
     # facet is ignored on set-path browse, so we filter by the per-listing condition.
-    # Moderno (recent/middle) = só "NM"; vintage WotC = "NM" ou "EX-NM" (a COMC gradua
-    # quase todo raw vintage como EX-NM — decisão do operador 2026-09-02).
+    # NM em todas as eras; LP exige vendas LP;
+    # EX-NM é sempre encaminhada à revisão sem referência presumida.
     comc_condition_allow: tuple[str, ...] = ("nm",)
-    comc_condition_allow_vintage: tuple[str, ...] = ("nm", "ex-nm")
+    comc_condition_allow_vintage: tuple[str, ...] = ("nm",)
     # Raw LP entra SÓ com referência própria (mediana de ≥3 vendas "LP"/"Lightly Played"
     # da mesma carta+variante no PriceCharting); nunca comparada com NM. False desliga.
     lp_with_reference: bool = True
@@ -127,7 +127,7 @@ class Settings:
     scan_raw: bool = True                # cartas soltas NM
     scan_slabs: bool = True              # cartas gradadas (PSA/BGS/TAG/CGC Pristine 10)
     graded_allow: frozenset[str] = field(default_factory=lambda: frozenset(DEFAULT_GRADED_ALLOW))
-    iconic_only: bool = True             # só Pokémon da lista icônica (--all-pokemon desliga)
+    iconic_only: bool = False             # lista icônica opcional; default todos os Pokémon
     set_allowlist: tuple[str, ...] = ()
 
     # --- Scan behaviour ---
@@ -137,7 +137,7 @@ class Settings:
     max_english_per_set: int = 0         # para o set após N listagens INGLESAS válidas; 0 = todas
     chase_only: bool = False
     chase_exclude_rarities: tuple[str, ...] = ("common", "uncommon", "rare")
-    top_n: int = 200
+    top_n: int = 0  # 0 = entrega completa
     scan_interval_s: int = 3600          # flush parcial (~hora)
     min_match_confidence: float = 0.80   # abaixo disto vai para o balde low-confidence
     trust_confidence: float = 0.90       # abaixo disto = MATCH_REVIEW
@@ -172,7 +172,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         comc_condition_band=_get("COMC_CONDITION_BAND", "EX-NM"),
         comc_seller_repo=_get("COMC_SELLER_REPO", ""),
         comc_condition_allow=_csv("COMC_CONDITION_ALLOW", "nm"),
-        comc_condition_allow_vintage=_csv("COMC_CONDITION_ALLOW_VINTAGE", "nm,ex-nm"),
+        comc_condition_allow_vintage=_csv("COMC_CONDITION_ALLOW_VINTAGE", "nm"),
         lp_with_reference=_get_bool("LP_WITH_REFERENCE", True),
         comc_exclude_variants=_csv(
             "COMC_EXCLUDE_VARIANTS",
@@ -186,7 +186,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         scan_slabs=_get_bool("SCAN_SLABS", True),
         graded_allow=frozenset(g.strip().upper() for g in graded_allow.split(",") if g.strip())
         if graded_allow else frozenset(DEFAULT_GRADED_ALLOW),
-        iconic_only=_get_bool("ICONIC_ONLY", True),
+        iconic_only=_get_bool("ICONIC_ONLY", False),
         set_allowlist=tuple(s.strip() for s in _get("SET_ALLOWLIST").split(",") if s.strip()),
         min_discount_percent=_get_int("MIN_DISCOUNT_PERCENT", MIN_DISCOUNT_PERCENT),
         min_comc_price=_get_float("MIN_COMC_PRICE", 10.0),
@@ -194,7 +194,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         max_english_per_set=_get_int("MAX_ENGLISH_PER_SET", 0),
         chase_only=_get_bool("CHASE_ONLY", False),
         chase_exclude_rarities=_csv("CHASE_EXCLUDE_RARITIES", "common,uncommon,rare"),
-        top_n=_get_int("TOP_N", 200),
+        top_n=max(0, _get_int("TOP_N", 0)),
         scan_interval_s=_get_int("SCAN_INTERVAL_SECONDS", 3600),
         min_match_confidence=_get_float("MIN_MATCH_CONFIDENCE", 0.80),
         trust_confidence=_get_float("TRUST_CONFIDENCE", 0.90),

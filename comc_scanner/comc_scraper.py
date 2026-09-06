@@ -191,7 +191,17 @@ def _parse_jsonld(html: str) -> list[ComcListing]:
             url = it.get("url") or (offer.get("url") if isinstance(offer, dict) else "") or ""
             if it.get("name") and price:
                 try:
-                    out.append(_listing_from_fields(it["name"], float(price), url))
+                    seller = offer.get("seller") or it.get("seller")
+                    if isinstance(seller, dict):
+                        seller = seller.get("name")
+                    picture = it.get("image")
+                    if isinstance(picture, list):
+                        picture = picture[0] if picture else None
+                    out.append(_listing_from_fields(
+                        it["name"], float(price), url,
+                        seller=seller if isinstance(seller, str) else None,
+                        image_url=picture if isinstance(picture, str) else None,
+                    ))
                 except (TypeError, ValueError):
                     continue
     return out
