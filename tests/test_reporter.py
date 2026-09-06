@@ -175,9 +175,9 @@ def test_columns_and_ranking_order():
     out = render_markdown([_deal(name="A", margin=0.30), _deal(name="B", margin=0.30)],
                           label="g", top_n=50)
     header = _header(out)
-    assert header.count("|") == 15  # 14 colunas
+    assert header.count("|") == 17  # 16 colunas
     expected = ["#", "Desconto%", "ROI bruto%", "COMC$", "Ref$", "Spread$", "Pokémon", "Carta",
-                "Set", "Tipo", "Ref", "Conf", "Status", "Links"]
+                "Set", "Tipo", "Ref", "Conf", "Status", "Vendedor", "Revisão aquisição", "Links"]
     assert [c.strip() for c in header.strip().strip("|").split("|")] == expected
     assert "lucro" not in out.lower()
 

@@ -47,14 +47,14 @@ def _slab(price, grade, grader="PSA"):
 
 def test_condition_allowlist_depends_on_era(index):
     sc = pl.Scanner(_settings())
-    assert sc._condition_ok(_raw(60.0, "EX-NM"), era="vintage") is True
+    assert sc._condition_ok(_raw(60.0, "EX-NM"), era="vintage") is False
     assert sc._condition_ok(_raw(60.0, "EX-NM"), era="recent") is False
     assert sc._condition_ok(_raw(60.0, "EX-NM"), era="") is False
     assert sc._condition_ok(_raw(60.0, "NM"), era="vintage") is True
     assert sc._condition_ok(_raw(60.0, "LP"), era="vintage") is False
     sc.process_listing(_raw(60.0, "EX-NM"), index, CTX, pl.KIND_RAW, era="recent")
-    assert sc.stats["skip_condition"] == 1
-    assert sc.process_listing(_raw(60.0, "EX-NM"), index, CTX, pl.KIND_RAW, era="vintage") is not None
+    assert sc.stats["condition_review"] == 1
+    assert sc.process_listing(_raw(60.0, "EX-NM"), index, CTX, pl.KIND_RAW, era="vintage") is None
 
 
 def test_price_ceiling_cuts_before_reference_lookup(index, monkeypatch):

@@ -96,10 +96,10 @@ def test_lp_disabled_and_other_played_conditions_stay_out(index, monkeypatch):
     sc2 = pl.Scanner(_settings())
     for cond in ("MP", "HP", "Noted", "EX-NM"):
         assert sc2.process_listing(_raw(40.0, cond), index, CTX, pl.KIND_RAW, era="recent") is None
-    assert sc2.stats["skip_condition"] == 4
-    # WotC (era vintage) segue aceitando EX-NM contra o preço NM do TCGplayer
+    assert sc2.stats["skip_condition"] == 3 and sc2.stats["condition_review"] == 1
+    # EX-NM nunca recebe referência NM, inclusive em vintage
     d = sc2.process_listing(_raw(40.0, "EX-NM"), index, CTX, pl.KIND_RAW, era="vintage")
-    assert d is not None and d.ref_source == "tcgplayer" and d.listing_type == "Raw EX-NM"
+    assert d is None and sc2.stats["condition_review"] == 2
 
 
 def test_listing_variants_feed_the_comparable_filter(index, monkeypatch):

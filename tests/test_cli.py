@@ -44,7 +44,7 @@ def test_scope_flags():
     assert s.scan_raw and not s.scan_slabs and not s.iconic_only
     s = _settings()
     _apply_overrides(s, build_parser().parse_args(["scan", "--slabs-only"]))
-    assert s.scan_slabs and not s.scan_raw and s.iconic_only
+    assert s.scan_slabs and not s.scan_raw and not s.iconic_only
     with pytest.raises(SystemExit):
         build_parser().parse_args(["scan", "--raw-only", "--slabs-only"])
 
