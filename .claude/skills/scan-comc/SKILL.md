@@ -1,12 +1,11 @@
 ---
 name: scan-comc
 description: >-
-  Rodar o scanner ÚNICO da COMC (cartas soltas NM + slabs PSA/BGS/TAG/CGC
-  Pristine 10, só Pokémon da lista icônica, desconto ≥20% sobre a referência) por
-  GRUPOS de sets e entregar via comc_summary.py. Use SEMPRE que o operador pedir
+  Rodar o scanner COMC personalizável por set/grupo, idioma, condição e
+  certificadora+nota, sem cruzar referências incompatíveis, e entregar via
+  comc_summary.py. Use SEMPRE que o operador pedir
   para rodar o scanner do COMC / "roda o COMC" / "scan COMC" / "escaneia a COMC" /
-  "roda o grupo X do COMC": antes de rodar, PERGUNTE qual dos 12 grupos (ou todos)
-  ele quer.
+  "roda o grupo X do COMC".
 ---
 
 REGRA VIGENTE 2026-09-06: ler ACQUISITION_POLICY.md na raiz. Todos os Pokémon e eras por padrão; NM/LP com referências próprias, EX-NM em revisão sem preço presumido; entrega completa. Substitui regras históricas conflitantes abaixo.
@@ -15,22 +14,23 @@ REGRA VIGENTE DO OPERADOR: ler DELIVERY_CHAT.md na raiz do repositório. Entrega
 
 
 
-# Scan do COMC por grupos — pergunte, rode, entregue
+# Scan do COMC — defina o escopo, rode, entregue
 
 O catálogo validado (sets `validated: true` de `comc_scanner/comc_set_slugs.json`)
 está dividido em **12 grupos** (SV, WotC, EX, DP/Platinum, HGSS/BW, XY, SM, SWSH) — fonte canônica `comc_scanner/groups.py`
 (`python -m comc_scanner list-groups` lista sem rede). Cada set é varrido em
-**duas passadas**: cartas soltas (WotC ≤2003 NM ou EX-NM; 2004+ só NM; LP só com
+**duas passadas**: cartas soltas (NM em todas as eras; EX-NM vai para revisão sem preço; LP só com
 referência LP = mediana de ≥3 vendas "LP") e slabs (PSA 8-10, CGC 9-10 Gem/Pristine,
 BGS 9-10/Black Label, SGC 9-10, TAG 9.5/10 — referência = mediana de vendas da MESMA
-certificadora+nota+variante; coluna do PriceCharting nunca é referência). Só cartas de Pokémon da lista
-`comc_scanner/iconic_pokemon.csv` (top-100 do operador) entram; desconto mínimo
-**20%** (`(ref − COMC)/ref`); piso US$10.
+certificadora+nota+variante; coluna do PriceCharting nunca é referência). Todos os
+Pokémon entram por padrão; `--iconic-only` e `--chase-only` são restrições opcionais.
+Desconto mínimo **20%** (`(ref − COMC)/ref`); piso US$10.
 
-## Passo 1 — SEMPRE perguntar qual grupo rodar
+## Passo 1 — confirmar o escopo ausente
 
-Pergunte ao operador (AskUserQuestion) qual grupo rodar — nunca assuma. Um por vez
-(nunca 2 scans no mesmo IP). Opções:
+Se o operador não informou grupo nem sets, pergunte qual dos 12 grupos, `all` ou quais
+sets exatos deseja. Preserve filtros informados de idioma, condição, certificadora e
+nota. Um scan por vez (nunca 2 scans no mesmo IP). Opções de grupo:
 
 ### Grupo 1 — SV recente (7 sets, era `recent`, ~40-80 min*)
 SV10: Destined Rivals · SV09: Journey Together · SV: Prismatic Evolutions ·
@@ -91,9 +91,11 @@ python -m comc_scanner scan --group <N|all>
 - Cada run começa **do zero** e usa **só dados do dia** (snapshot tcgcsv de hoje,
   cache PriceCharting de hoje, sem cursor de retomada). Se um run morrer no meio,
   rode o grupo de novo.
-- Variações: `--min-discount 25` (inteiro), `--max-price 300` (teto por carta),
-  `--max-english 300` (para o set após 300 inglesas válidas), `--raw-only` /
-  `--slabs-only`, `--all-pokemon` (ignora a lista icônica), `--chase-only`,
+- Variações: `--sets "Base Set,Jungle"`, `--languages en,ja`,
+  `--conditions "NM,LP"`, `--grades "PSA 10,CGC 10 PRISTINE"`,
+  `--min-discount 25` (inteiro), `--max-price 300` (teto por carta),
+  `--max-selected 300` (limita listagens dos idiomas selecionados; `--max-english`
+  é alias legado), `--raw-only` / `--slabs-only`, `--iconic-only`, `--chase-only`,
   `--max-pages 3` (smoke rápido), `--top-n 400`.
 
 ## Passo 3 — entregar (ritual FIXO, contrato do repo, não negociável)
@@ -110,7 +112,8 @@ python comc_summary.py results/comc_deals_grupo<N>_latest.json -o results/comc-g
    DOIS links: `[oferta]` (COMC) · `[referência]` (TCGplayer para raw; PriceCharting
    para slab), lidos do JSON — nunca inventados.
 2. TODOS os baldes aparecem: 🟢 OK e ⚠️ MATCH_REVIEW (confiança <0.90, preço
-   mid/low, `vendas<3` = só 1–2 vendas comparáveis, `coluna÷vendas`) — nenhuma linha
+   mid/low, `vendas<3` = só 1–2 vendas comparáveis, `coluna÷vendas`,
+   `TCG÷vendas-raw` ou `desconto-extremo`) — nenhuma linha
    escondida; `baixa-liquidez(365d)` é nota, não muda status. Ordem = ranking
    (ROI bruto → desconto % → spread US$ → popularidade do Pokémon). Nunca "lucro".
    **Diagnóstico** (pedido do operador): `scan --group all --min-price 5 --min-discount 10`
@@ -128,5 +131,6 @@ python comc_summary.py results/comc_deals_grupo<N>_latest.json -o results/comc-g
   (mailbox = hub de recebimento; consolidação/envio é decisão dele, fora do scanner).
 - **Recorrência é MANUAL** (decisão do operador): não criar agendamento.
 - Invariantes: desconto `(ref − COMC)/ref` ≥ 20% (inteiro em `--min-discount`),
-  raw NM-only por match exato, English-only, piso US$10, slabs só nas notas da
-  allowlist, referência de slab = PriceCharting por nota (nunca preço raw).
+  condição/idioma/variante/certificadora/nota por match exato, piso US$10 e
+  referência de slab = vendas PriceCharting da mesma nota (nunca preço raw).
+  Idioma não inglês permanece descoberta sem preço até existir referência do mesmo idioma.

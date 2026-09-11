@@ -21,7 +21,7 @@ cp .env.example .env          # all variables optional; defaults shown in the fi
 ## Usage
 
 ```bash
-python -m comc_scanner list-groups            # the 4 canonical scan groups (no network)
+python -m comc_scanner list-groups            # the 12 canonical scan groups (no network)
 python -m comc_scanner scan --group 1         # one group: loose NM + slabs, 20% min discount
 python -m comc_scanner scan --group all       # all 12 groups in sequence (1999-2023)
 python -m comc_scanner scan --group all --min-price 5 --min-discount 10   # diagnostic run (floor $5, 10%)
@@ -51,6 +51,11 @@ seção de descoberta sem preço até existir uma fonte de vendas concluídas do
 idioma. O scanner nunca calcula margem cruzando idiomas.
 Marcadores de idioma também são reconhecidos nas URLs COMC. Configurações inválidas
 em `COMC_LANGUAGES` ou `RAW_CONDITIONS` interrompem a execução com erro explícito.
+
+Além dos filtros, duas guardas conservadoras apenas mudam o status para
+`MATCH_REVIEW`: divergência superior a 40% entre o TCGplayer market e a mediana de
+vendas raw do PriceCharting (`RAW_PLAUSIBILITY=true`) e desconto de pelo menos 60%
+(`EXTREME_DISCOUNT_PERCENT=60`). Nenhuma delas substitui o preço de referência.
 
 Every run starts from scratch and uses only today's data (no resume cursor; the
 reference snapshot is re-downloaded; the per-card cache is dated). Run

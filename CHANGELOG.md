@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.4 — 2026-09-11 — filtros personalizados + guardas de plausibilidade
+
+Parecer do operador (2026-09-06) sobre o PR #25 (fechado como obsoleto): sinalizar, nunca
+substituir o preço.
+- **Filtros personalizados**: seleção exata por set, idioma, condição e par
+  certificadora+nota (`--sets`, `--languages`, `--conditions`, `--grades`). Idiomas
+  não ingleses são preservados como descoberta sem preço até existir referência de
+  vendas do mesmo idioma; nunca usam TCGplayer inglês. CGC Gem/Pristine e BGS
+  comum/Black Label permanecem subcategorias distintas.
+- **Plausibilidade raw NM**: `pricecharting_client.ungraded_sales` + `raw_plausibility`
+  (mediana de ≥3 vendas de carta SOLTA, qualquer condição, sem nota, mesma variante, ≤365 d).
+  NÃO é referência financeira (mistura NM/LP/MP). O pipeline a guarda em `raw_sales_*`
+  (JSON) para cartas soltas aprovadas cujo link já resolveu a página do PC (+1 request
+  cacheado); `classify_row` marca `TCG÷vendas-raw(m)` quando o TCGplayer market diverge
+  >40% (`RAW_SALES_DEVIATION_MAX`). Funil: `raw_plausibility_ok|missing|error`.
+  `RAW_PLAUSIBILITY=0` desliga. Motivação: Charizard 4/102 market US$868 vs vendas US$329.
+- **Desconto extremo**: `EXTREME_DISCOUNT_PERCENT` (default 60; 0 desliga) → motivo
+  `desconto-extremo(≥N%)` em `classify_row` — a linha vai para MATCH_REVIEW, nunca é
+  descartada. O valor do run é gravado no JSON e reusado pela entrega.
+- Docs: README (12 grupos, não 4), CLAUDE.md/skill/reporter/pipeline sem menções a EX-NM
+  precificada (política 2026-09-06), contagem de testes.
+- **Validação**: 307 testes offline; títulos de vendas raw em todos os idiomas
+  estrangeiros suportados e slabs apenas identificados pela certificadora são excluídos
+  da plausibilidade inglesa.
+
 ## 0.4.3 — 2026-09-02 — link [referência] das cartas soltas = página do PriceCharting
 
 - Decisão do operador: o link `[referência]` de raw NM/EX-NM passa a ser a página exata da carta no PriceCharting (vendas eBay, gráfico, PSA 10/9); o PREÇO continua o TCGplayer market. Só para deals aprovados (1-2 requests cada); sem página/erro → link do TCGplayer (`pc_link_missing`/`pc_link_error` no funil).

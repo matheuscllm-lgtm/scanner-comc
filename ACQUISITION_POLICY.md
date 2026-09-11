@@ -1,6 +1,11 @@
 # Política de aquisição e cobertura — 2026-09-06
 
 - Universo padrão: todas as cartas Pokémon identificáveis no catálogo, em todas as eras; raw e slabs habilitados. Lista icônica e chase são filtros opcionais, não obrigatórios.
+- O operador pode restringir por set/grupo, idioma, condição e par certificadora+nota.
+  A referência deve conservar carta, variante, idioma, condição, certificadora e nota.
+  Como a fonte raw atual é inglesa, listagens de outros idiomas ficam em descoberta sem
+  preço até existir uma fonte de vendas concluídas do mesmo idioma; nunca recebem margem
+  calculada contra preço inglês.
 - Não significa cobertura integral de todo o inventário COMC: o coletor trabalha com cartas e sets cadastrados. Selados, acessórios e produtos fora do catálogo não têm avaliação automática neste scanner. Sets sem caminho validado são informados no relatório; cartas sem match aparecem em revisão sem referência.
 - Raw NM pode usar TCGplayer market, com fallback mid/low marcado para revisão. EX-NM nunca recebe preço NM ou LP por presunção: vai para seção própria sem margem calculada, inclusive se um .env antigo incluir EX-NM na allowlist. LP exige pelo menos 3 vendas LP da mesma carta e variante.
 - Slabs mantêm as notas permitidas, referência por certificadora/nota/variante exatas e avisos de liquidez. Não há filtro automático de baixa população.
