@@ -27,7 +27,26 @@ python -m comc_scanner scan --group all       # all 12 groups in sequence (1999-
 python -m comc_scanner scan --group all --min-price 5 --min-discount 10   # diagnostic run (floor $5, 10%)
 python comc_summary.py results/comc_deals_grupo1_latest.json -o results/comc-grupo1-<date>.md --group 1 --sensitivity 10,15,20
 python -m comc_scanner scan --sets "Base Set" --era vintage --raw-only --min-discount 25
+python -m comc_scanner scan --sets "SV: Scarlet & Violet 151" --languages ja --slabs-only --grades "PSA 10,TAG 10"
+python -m comc_scanner scan --group 9 --languages en --conditions "NM,LP" --grades "PSA 9,PSA 10,BGS 9.5"
 ```
+
+### Filtros personalizados
+
+- `--sets` usa igualdade exata de nome/abreviação; nunca substring.
+- `--languages` aceita `en,ja,ko,zh,de,es,fr,it,pt,th,id` (também nomes como
+  `english,japanese,chinese`). O padrão permanece `en`.
+- `--conditions` escolhe `NM`, `LP` e/ou `EX-NM`. LP só recebe preço com vendas LP
+  comparáveis; EX-NM permanece revisão sem preço presumido.
+- `--grades` escolhe certificadora+nota exatas. TAG compara com TAG, BGS com BGS,
+  CGC com CGC, PSA com PSA e SGC com SGC.
+- `--max-selected` limita por set a quantidade vista nos idiomas escolhidos
+  (`--max-english` continua como alias legado).
+
+Por segurança, o preço TCGplayer deste projeto é referência apenas para inglês.
+Listagens selecionadas em japonês, chinês, coreano ou outro idioma são preservadas na
+seção de descoberta sem preço até existir uma fonte de vendas concluídas do mesmo
+idioma. O scanner nunca calcula margem cruzando idiomas.
 
 Every run starts from scratch and uses only today's data (no resume cursor; the
 reference snapshot is re-downloaded; the per-card cache is dated). Run

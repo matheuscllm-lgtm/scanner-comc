@@ -76,6 +76,7 @@ class ComcListing:
     image_url: str | None = None
     item_id: str | None = None
     description: str = ""  # full COMC description line (set + printing/edition signal)
+    language: str = ""     # en/ja/ko/zh/...; inferred when absent in source markup
 
 
 @dataclass(slots=True)
@@ -137,6 +138,7 @@ class Deal:
             "rarity": self.product.rarity or "",
             "listing_type": self.listing_type,
             "condition": self.listing.condition,
+            "language": self.listing.language or "en",
             "sub_type": self.sub_type_used,
             "price_field": self.price_field_used,
             "ref_source": self.ref_source,

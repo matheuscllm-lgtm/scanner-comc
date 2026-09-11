@@ -69,3 +69,6 @@ def test_budget_and_english_cap_flags():
     _apply_overrides(s, build_parser().parse_args(["scan", "--max-price", "250", "--max-english", "300"]))
     assert s.max_comc_price == 250.0 and s.max_english_per_set == 300
     assert _settings().max_comc_price == 0.0 and _settings().max_english_per_set == 0
+    s2 = _settings()
+    _apply_overrides(s2, build_parser().parse_args(["scan", "--max-selected", "25"]))
+    assert s2.max_english_per_set == 25
