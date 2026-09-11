@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from urllib.parse import unquote
 
 LANGUAGE_LABELS = {
     "en": "English",
@@ -71,7 +72,7 @@ def parse_languages(value: str) -> frozenset[str]:
 
 def detect_language(*texts: str) -> str:
     """Infer language from explicit COMC markers; unmarked listings are English."""
-    blob = _plain(" ".join(text or "" for text in texts))
+    blob = _plain(unquote(" ".join(text or "" for text in texts))).replace("_", " ")
     for code, pattern in _MARKERS:
         if pattern.search(blob):
             return code

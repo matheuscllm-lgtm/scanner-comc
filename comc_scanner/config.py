@@ -174,13 +174,11 @@ class Settings:
 def load_settings(env_file: Path | None = None) -> Settings:
     _load_dotenv(env_file or (PROJECT_ROOT / ".env"))
     graded_allow = _get("GRADED_ALLOW")
-    try:
-        languages = parse_languages(_get("COMC_LANGUAGES", "en"))
-    except ValueError as exc:
-        _log.warning("COMC_LANGUAGES inválido (%s); usando en", exc)
-        languages = frozenset({"en"})
+    languages = parse_languages(_get("COMC_LANGUAGES", "en"))
     raw_conditions = frozenset(v.strip().lower() for v in
                                _get("RAW_CONDITIONS", "nm,lp,ex-nm").split(",") if v.strip())
+    if not raw_conditions or not raw_conditions <= {"nm", "lp", "ex-nm"}:
+        raise ValueError("RAW_CONDITIONS inválido; use NM,LP,EX-NM")
     return Settings(
         comc_session_cookie=_get("COMC_SESSION_COOKIE"),
         comc_condition_band=_get("COMC_CONDITION_BAND", "EX-NM"),

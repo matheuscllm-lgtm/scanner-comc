@@ -8,7 +8,7 @@ from comc_scanner.__main__ import _apply_overrides, build_parser
 from comc_scanner.config import load_settings
 from comc_scanner.languages import detect_language, parse_languages
 from comc_scanner.models import ComcListing
-from comc_scanner.pipeline import KIND_RAW, Scanner
+from comc_scanner.pipeline import KIND_RAW, KIND_SLAB, Scanner
 from comc_scanner.tcg_index import TcgIndex
 
 
@@ -73,3 +73,47 @@ def test_unselected_condition_is_rejected_before_reference():
     scanner = Scanner(_settings(raw_conditions=frozenset({"nm"})))
     assert scanner.process_listing(listing, TcgIndex(), None, KIND_RAW) is None
     assert scanner.stats["skip_condition"] == 1
+
+
+@pytest.mark.parametrize("marker,language", [
+    ("Pokemon_151_Japanese_Base", "ja"),
+    ("Pokemon_Traditional%20Chinese_Base", "zh"),
+    ("Pokemon_Korean_Base", "ko"),
+])
+@pytest.mark.parametrize("kind", [KIND_RAW, KIND_SLAB])
+def test_language_in_url_never_reaches_english_reference(tmp_path, marker, language, kind):
+    listing = ComcListing("Pikachu", 20, f"https://comc.com/Cards/{marker}/1",
+                          condition="NM", graded=kind == KIND_SLAB,
+                          grade="PSA 10" if kind == KIND_SLAB else None)
+    scanner = Scanner(_settings(languages=frozenset({language}), results_dir=tmp_path))
+    with patch("comc_scanner.pipeline.match", side_effect=AssertionError("English reference")):
+        assert scanner.process_listing(listing, TcgIndex(), None, kind) is None
+    assert scanner.reporter.unpriced[listing.url]["language"] == language
+    assert scanner.stats["foreign_discovery"] == 1
+
+
+@pytest.mark.parametrize("key,value", [
+    ("COMC_LANGUAGES", "chinesse"), ("RAW_CONDITIONS", "NN"),
+    ("RAW_CONDITIONS", ","),
+])
+def test_invalid_environment_filters_fail_before_scan(monkeypatch, key, value):
+    monkeypatch.setenv(key, value)
+    with pytest.raises(ValueError):
+        _settings()
+
+
+@pytest.mark.parametrize("flag,value", [
+    ("--grades", "PSSA 10"), ("--grades", "CGC 10"),
+    ("--grades", "PSA 11"), ("--grades", "BGS 9.5 INVALID"),
+    ("--max-selected", "-1"),
+])
+def test_invalid_cli_selection_fails(flag, value):
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["scan", flag, value])
+
+
+def test_grade_subcategories_remain_distinct():
+    args = build_parser().parse_args([
+        "scan", "--grades", "CGC 10 Gem Mint,CGC 10 Pristine,BGS 10 Black Label,BGS 10",
+    ])
+    assert args.grades == {"CGC 10 GEM", "CGC 10 PRISTINE", "BGS 10 BLACK", "BGS 10"}

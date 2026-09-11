@@ -40,6 +40,8 @@ python -m comc_scanner scan --group 9 --languages en --conditions "NM,LP" --grad
   comparáveis; EX-NM permanece revisão sem preço presumido.
 - `--grades` escolhe certificadora+nota exatas. TAG compara com TAG, BGS com BGS,
   CGC com CGC, PSA com PSA e SGC com SGC.
+  Para CGC 10, especifique `CGC 10 GEM` ou `CGC 10 PRISTINE`; para BGS Black Label,
+  use `BGS 10 BLACK`. Notas ambíguas/inválidas são rejeitadas antes do scan.
 - `--max-selected` limita por set a quantidade vista nos idiomas escolhidos
   (`--max-english` continua como alias legado).
 
@@ -47,6 +49,8 @@ Por segurança, o preço TCGplayer deste projeto é referência apenas para ingl
 Listagens selecionadas em japonês, chinês, coreano ou outro idioma são preservadas na
 seção de descoberta sem preço até existir uma fonte de vendas concluídas do mesmo
 idioma. O scanner nunca calcula margem cruzando idiomas.
+Marcadores de idioma também são reconhecidos nas URLs COMC. Configurações inválidas
+em `COMC_LANGUAGES` ou `RAW_CONDITIONS` interrompem a execução com erro explícito.
 
 Every run starts from scratch and uses only today's data (no resume cursor; the
 reference snapshot is re-downloaded; the per-card cache is dated). Run

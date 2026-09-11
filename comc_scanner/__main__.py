@@ -9,6 +9,7 @@ from .config import VALID_ERAS, load_settings
 from .groups import SCAN_GROUPS, VALID_GROUP_NUMBERS, describe_groups, group_sets
 from .logging_setup import setup_logging
 from .languages import parse_languages
+from .grading import parse_grade
 from .pipeline import Scanner
 
 log = logging.getLogger("comc_scanner.cli")
@@ -40,9 +41,18 @@ def _conditions(value: str) -> frozenset[str]:
 
 
 def _grades(value: str) -> frozenset[str]:
-    out = frozenset(v.strip().upper() for v in value.split(",") if v.strip())
+    out = frozenset(" ".join(v.upper().split()).replace("GEM MINT", "GEM")
+                    .replace("BLACK LABEL", "BLACK")
+                    for v in value.split(",") if v.strip())
     if not out:
         raise argparse.ArgumentTypeError("informe ao menos uma certificadora/nota")
+    for key in out:
+        parts = key.split(" ", 1)
+        grade = parse_grade(*parts) if len(parts) == 2 else None
+        if grade is None or not 1 <= grade.value <= 10 or grade.key != key:
+            raise argparse.ArgumentTypeError(
+                f"certificadora/nota inválida ou ambígua: {key!r}; "
+                "use PSA 10, TAG 10, BGS 9.5, CGC 10 GEM ou CGC 10 PRISTINE")
     return out
 
 
@@ -64,7 +74,7 @@ def _add_scan_args(p: argparse.ArgumentParser) -> None:
                    help="piso do preço COMC em US$ (default 10 = regra R$50; 0 desliga)")
     p.add_argument("--max-price", type=float,
                    help="teto de orçamento por carta em US$ (corta antes do PriceCharting); 0=sem teto")
-    p.add_argument("--max-selected", "--max-english", dest="max_english", type=int,
+    p.add_argument("--max-selected", "--max-english", dest="max_english", type=_nonnegative,
                    help="encerra cada set/passada após N listagens dos idiomas selecionados "
                         "(0=todas; --max-english é alias legado)")
     p.add_argument("--top-n", type=_nonnegative, help="máximo de deals gravados/reportados; 0 = todos (default)")
@@ -188,7 +198,10 @@ def main(argv: list[str] | None = None) -> int:
         print(describe_groups())
         return 0
     setup_logging(logging.INFO)
-    settings = load_settings()
+    try:
+        settings = load_settings()
+    except ValueError as exc:
+        parser.error(str(exc))
     _apply_overrides(settings, args)
 
     if args.command == "warm":
