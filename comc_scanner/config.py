@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .grading import DEFAULT_GRADED_ALLOW
+from .languages import parse_languages
 
 _log = logging.getLogger("comc_scanner.config")
 
@@ -118,6 +119,12 @@ class Settings:
         "japanese", "korean", "german", "spanish", "french", "italian",
         "chinese", "portuguese", "thai", "indonesian",
     )
+    # Idiomas explicitamente selecionados. Listagem sem marcador é tratada como inglês.
+    # Não autoriza referência cruzada: não-inglês é entregue como descoberta sem preço
+    # até existir fonte de vendas equivalentes para aquele idioma.
+    languages: frozenset[str] = field(default_factory=lambda: frozenset({"en"}))
+    raw_conditions: frozenset[str] = field(
+        default_factory=lambda: frozenset({"nm", "lp", "ex-nm"}))
     comc_sort: str = "sh"                # highest price first
     comc_request_delay_s: float = 4.0
     comc_headless: bool = False          # COMC's Cloudflare only clears HEADFUL (real Chrome)
@@ -134,7 +141,7 @@ class Settings:
     min_discount_percent: int = MIN_DISCOUNT_PERCENT
     min_comc_price: float = 10.0         # piso US$ (R$50 "carta valiosa"); 0 desliga
     max_comc_price: float = 0.0          # teto US$ por carta (orçamento); 0 desliga
-    max_english_per_set: int = 0         # para o set após N listagens INGLESAS válidas; 0 = todas
+    max_english_per_set: int = 0         # legado: teto de listagens nos idiomas selecionados
     chase_only: bool = False
     chase_exclude_rarities: tuple[str, ...] = ("common", "uncommon", "rare")
     top_n: int = 0  # 0 = entrega completa
@@ -167,6 +174,11 @@ class Settings:
 def load_settings(env_file: Path | None = None) -> Settings:
     _load_dotenv(env_file or (PROJECT_ROOT / ".env"))
     graded_allow = _get("GRADED_ALLOW")
+    languages = parse_languages(_get("COMC_LANGUAGES", "en"))
+    raw_conditions = frozenset(v.strip().lower() for v in
+                               _get("RAW_CONDITIONS", "nm,lp,ex-nm").split(",") if v.strip())
+    if not raw_conditions or not raw_conditions <= {"nm", "lp", "ex-nm"}:
+        raise ValueError("RAW_CONDITIONS inválido; use NM,LP,EX-NM")
     return Settings(
         comc_session_cookie=_get("COMC_SESSION_COOKIE"),
         comc_condition_band=_get("COMC_CONDITION_BAND", "EX-NM"),
@@ -178,6 +190,8 @@ def load_settings(env_file: Path | None = None) -> Settings:
             "COMC_EXCLUDE_VARIANTS",
             "japanese,korean,german,spanish,french,italian,chinese,portuguese,thai,indonesian",
         ),
+        languages=languages,
+        raw_conditions=raw_conditions or frozenset({"nm", "lp", "ex-nm"}),
         comc_sort=(_get("COMC_SORT", "sh") or "sh").lower(),
         comc_request_delay_s=_get_float("COMC_REQUEST_DELAY_SECONDS", 4.0),
         comc_headless=_get_bool("COMC_BROWSER_HEADLESS", False),

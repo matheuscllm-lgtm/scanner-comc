@@ -28,6 +28,7 @@ from .comc_scraper import ComcAccessError, ComcBlockedError, ComcScraper
 from .config import Settings
 from .grading import Grade
 from .iconic import match_iconic
+from .languages import detect_language, language_label
 from .margin import gross_margin
 from .matcher import match
 from .models import Deal
@@ -343,9 +344,11 @@ class Scanner:
         return cond == "nm" and cond in allow
 
     def _variant_ok(self, listing) -> bool:
-        """English-only: drop foreign-language sub-printings (Japanese/Korean/...)."""
-        blob = f"{listing.set_hint or ''} {listing.raw_name or ''}".lower()
-        return not any(v in blob for v in self.settings.comc_exclude_variants)
+        """Keep only explicitly selected languages; unmarked COMC listings are EN."""
+        language = listing.language or detect_language(
+            listing.set_hint or "", listing.raw_name or "", listing.description or "", listing.url or "")
+        listing.language = language
+        return language in self.settings.languages
 
     def _price_ok(self, listing) -> bool:
         floor = self.settings.min_comc_price
@@ -456,10 +459,14 @@ class Scanner:
         st = stats if stats is not None else self.stats
         st.bump("seen")
         lp_candidate = False
-        condition_review = kind == KIND_RAW and not listing.graded and (listing.condition or "").strip().lower() == "ex-nm"
+        raw_condition = (listing.condition or "").strip().lower()
+        condition_review = kind == KIND_RAW and not listing.graded and raw_condition == "ex-nm"
         if kind == KIND_RAW:
             if listing.graded:
                 st.bump("skip_graded_in_raw")
+                return None
+            if raw_condition not in s.raw_conditions:
+                st.bump("skip_condition")
                 return None
             if not self._condition_ok(listing, era):
                 # LP só segue no funil para buscar a SUA referência (vendas LP); nunca
@@ -497,6 +504,17 @@ class Scanner:
         if condition_review:
             st.bump("condition_review")
             self.reporter.add_unpriced(listing, "EX-NM: condição exige revisão; sem referência equivalente")
+            return None
+        if listing.language != "en":
+            # TCGCSV/TCGplayer in this repository is an English reference. Returning a
+            # margin here would silently compare different language markets. Preserve
+            # the selected listing in discovery output until a same-language sold-comps
+            # adapter is available.
+            st.bump("foreign_discovery")
+            self.reporter.add_unpriced(
+                listing,
+                f"{language_label(listing.language)}: descoberta sem referência do mesmo idioma",
+            )
             return None
         deal = match(listing, index, s, context_set_key=ctx)
         if deal is None:
@@ -616,9 +634,10 @@ class Scanner:
         next_flush = time.time() + s.scan_interval_s
         passes = ([(KIND_RAW, False)] if s.scan_raw else []) + \
                  ([(KIND_SLAB, True)] if s.scan_slabs else [])
-        log.info("Scan '%s': %d sets (era %s), passadas: %s, desconto mín. %d%%, "
-                 "Pokémon icônicos: %s.", label, len(targets), era,
-                 "+".join(k for k, _ in passes), s.min_discount_percent,
+        log.info("Scan '%s': %d sets (era %s), passadas: %s, idiomas: %s, "
+                 "desconto mín. %d%%, Pokémon icônicos: %s.", label, len(targets), era,
+                 "+".join(k for k, _ in passes), ",".join(sorted(s.languages)),
+                 s.min_discount_percent,
                  "só lista" if s.iconic_only else "todos")
         consecutive_blocked = 0
         try:
@@ -628,7 +647,7 @@ class Scanner:
                     era_path = f"{year}/{slug}" if year else slug
                     set_yielded = False
                     for kind, graded in passes:
-                        english_seen = 0  # listagens em inglês vistas nesta passada
+                        english_seen = 0  # nome legado: listagens nos idiomas selecionados
                         try:
                             for _page, listings in scraper.iter_listings(
                                 search_term=None, era_path=era_path,
@@ -652,13 +671,12 @@ class Scanner:
                                     self.reporter.flush(best.qualifying(), label,
                                                         best.low_conf(), stats=self.stats)
                                     next_flush += s.scan_interval_s
-                                # `--max-english`: o corte conta só listagens INGLESAS
-                                # válidas (as japonesas descartadas não contam) — sem a
-                                # flag, varre até a última página.
+                                # `--max-selected` (alias legado `--max-english`) conta
+                                # apenas listagens nos idiomas escolhidos.
                                 if s.max_english_per_set and english_seen >= s.max_english_per_set:
                                     self.stats.bump("sets_capped_max_english")
-                                    log.info("Set '%s' (%s): %d listagens inglesas — teto "
-                                             "--max-english atingido.", ts.name, kind, english_seen)
+                                    log.info("Set '%s' (%s): %d listagens nos idiomas selecionados — teto "
+                                             "--max-selected atingido.", ts.name, kind, english_seen)
                                     break
                                 if self._stop or (deadline and time.monotonic() >= deadline):
                                     log.info("Budget/stop hit at set '%s' (%s).", ts.name, kind)

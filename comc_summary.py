@@ -163,6 +163,9 @@ def build_markdown(payload: dict, group: int | None = None,
     scope = payload.get("scope") or payload.get("era", "?")
     grupo = f"grupo {group}" if group else f"escopo {scope}"
     graded = payload.get("graded_allow") or []
+    languages = payload.get("languages") or ["en"]
+    conditions = payload.get("raw_conditions") or ["nm", "lp", "ex-nm"]
+    conditions = [c for c in ("nm", "lp", "ex-nm") if c in conditions]
     min_discount = payload.get("min_discount_percent", "?")
     header = [
         "# COMC → referência (TCGplayer raw · PriceCharting slabs/LP) — entrega do scan",
@@ -171,8 +174,8 @@ def build_markdown(payload: dict, group: int | None = None,
         f"- OK: {len(ok)} · MATCH_REVIEW: {len(review)} (sendo {n_low} do balde low-confidence)"
         + (" — todas as faixas; contagem por limiar abaixo" if sensitivity else ""),
         f"- Desconto mínimo: {min_discount}% · piso US$"
-        f"{payload.get('min_comc_price', '?')} · raw NM; EX-NM separada para revisão; LP só com "
-        f"referência LP · só inglês · "
+        f"{payload.get('min_comc_price', '?')} · condições: {', '.join(c.upper() for c in conditions)}; "
+        f"EX-NM sem preço presumido; LP só com referência LP · idiomas: {', '.join(languages)} · "
         f"Pokémon: {'lista icônica' if payload.get('iconic_only', True) else 'todos'}",
         f"- Slabs aceitos: {', '.join(graded) if graded else '—'}",
     ]

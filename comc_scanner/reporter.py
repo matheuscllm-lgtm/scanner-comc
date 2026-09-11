@@ -6,7 +6,7 @@ entrega) só reparte as linhas em baldes e reusa estas funções — nunca monta
 tabela à mão.
 
 Colunas: # | Desconto% | ROI bruto% | COMC$ | Ref$ | Spread$ | Pokémon | Carta | Set |
-Tipo | Ref | Conf | Status | Links
+Idioma | Tipo | Ref | Conf | Status | Links
 - `Desconto%` = (ref − COMC)/ref; `Spread$` = ref − COMC (bruto, sem taxas);
   `ROI bruto%` = spread/COMC (nomenclatura do operador, 2026-09-02);
 - `Carta` = nome + número de coleção ("Pikachu 173/165");
@@ -66,6 +66,7 @@ _TABLE_COLS = [
     ("pokemon", "Pokémon"),
     ("card_number", "Carta"),
     ("set", "Set"),
+    ("language", "Idioma"),
     ("listing_type", "Tipo"),
     ("ref_label", "Ref"),
     ("confidence", "Conf"),
@@ -86,7 +87,8 @@ FUNNEL_LABELS = [
     ("skip_grade_out_of_scope", "Ignoradas: nota fora do escopo"),
     ("skip_condition", "Ignoradas: condição fora do permitido (WotC ≤2003 NM/EX-NM; "
                        "2004+ NM; LP só com referência LP)"),
-    ("skip_language", "Ignoradas: idioma ≠ inglês"),
+    ("skip_language", "Ignoradas: idioma não selecionado"),
+    ("foreign_discovery", "Não-inglês: descobertas sem referência equivalente"),
     ("skip_price_floor", "Ignoradas: abaixo do piso US$"),
     ("skip_price_ceiling", "Ignoradas: acima do teto US$ (--max-price)"),
     ("skip_not_iconic", "Ignoradas: Pokémon fora da lista"),
@@ -111,7 +113,7 @@ FUNNEL_LABELS = [
     ("comc_errors", "Sets bloqueados na COMC"),
     ("comc_aborted", "RUN ABORTADO (browser fechado / COMC inacessível) — sets restantes não varridos"),
     ("comc_partial_sets", "Sets/passadas truncados (bloqueio no meio)"),
-    ("sets_capped_max_english", "Sets/passadas cortados por --max-english"),
+    ("sets_capped_max_english", "Sets/passadas cortados por --max-selected"),
 ]
 _KNOWN_FUNNEL_KEYS = {k for k, _ in FUNNEL_LABELS}
 
@@ -312,6 +314,7 @@ class Reporter:
         self.unpriced[listing.url] = {
             "card_number": f"{listing.raw_name} {listing.number_hint or ''}".strip(),
             "set": listing.set_hint or "", "condition": listing.condition,
+            "language": listing.language or "en",
             "listing_type": listing.grade or f"Raw {listing.condition}",
             "comc_price": listing.price, "tcg_reference": None,
             "margin_pct": None, "roi_pct": None, "spread_abs": None,
@@ -351,6 +354,8 @@ class Reporter:
             "min_discount_percent": self.settings.min_discount_percent,
             "min_comc_price": self.settings.min_comc_price,
             "graded_allow": sorted(self.settings.graded_allow),
+            "languages": sorted(self.settings.languages),
+            "raw_conditions": sorted(self.settings.raw_conditions),
             "iconic_only": self.settings.iconic_only,
             "trust_confidence": self.settings.trust_confidence,
             "top_n": self.settings.top_n,

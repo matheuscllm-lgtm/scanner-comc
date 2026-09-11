@@ -8,6 +8,8 @@ import sys
 from .config import VALID_ERAS, load_settings
 from .groups import SCAN_GROUPS, VALID_GROUP_NUMBERS, describe_groups, group_sets
 from .logging_setup import setup_logging
+from .languages import parse_languages
+from .grading import parse_grade
 from .pipeline import Scanner
 
 log = logging.getLogger("comc_scanner.cli")
@@ -20,20 +22,61 @@ def _nonnegative(value: str) -> int:
     return number
 
 
+def _languages(value: str) -> frozenset[str]:
+    try:
+        return parse_languages(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
+def _conditions(value: str) -> frozenset[str]:
+    aliases = {"near mint": "nm", "lightly played": "lp", "ex nm": "ex-nm"}
+    allowed = {"nm", "lp", "ex-nm"}
+    out = frozenset(aliases.get(v.strip().lower().replace("_", " "),
+                                v.strip().lower())
+                    for v in value.split(",") if v.strip())
+    if not out or not out <= allowed:
+        raise argparse.ArgumentTypeError("condições válidas: NM, LP, EX-NM")
+    return out
+
+
+def _grades(value: str) -> frozenset[str]:
+    out = frozenset(" ".join(v.upper().split()).replace("GEM MINT", "GEM")
+                    .replace("BLACK LABEL", "BLACK")
+                    for v in value.split(",") if v.strip())
+    if not out:
+        raise argparse.ArgumentTypeError("informe ao menos uma certificadora/nota")
+    for key in out:
+        parts = key.split(" ", 1)
+        grade = parse_grade(*parts) if len(parts) == 2 else None
+        if grade is None or not 1 <= grade.value <= 10 or grade.key != key:
+            raise argparse.ArgumentTypeError(
+                f"certificadora/nota inválida ou ambígua: {key!r}; "
+                "use PSA 10, TAG 10, BGS 9.5, CGC 10 GEM ou CGC 10 PRISTINE")
+    return out
+
+
 def _add_scan_args(p: argparse.ArgumentParser) -> None:
     sel = p.add_mutually_exclusive_group()
     sel.add_argument("--group", help="grupo canônico 1-12 (ver `list-groups`) ou `all` "
                                      "(todos em sequência); define os sets E a era")
     sel.add_argument("--sets", help="allowlist de sets separada por vírgula (nomes/abrevs)")
     p.add_argument("--era", choices=VALID_ERAS, help="era dos sets (default: do env)")
+    p.add_argument("--languages", type=_languages,
+                   help="idiomas: en,ja,ko,zh,de,es,fr,it,pt,th,id (CSV; default en)")
+    p.add_argument("--conditions", type=_conditions,
+                   help="condições raw desejadas: NM,LP,EX-NM (CSV)")
+    p.add_argument("--grades", type=_grades,
+                   help='slabs exatos desejados, ex.: "PSA 10,TAG 10,BGS 9.5"')
     p.add_argument("--min-discount", type=int,
                    help="desconto mínimo em %% INTEIRO sobre a referência (default 20)")
     p.add_argument("--min-price", type=float,
                    help="piso do preço COMC em US$ (default 10 = regra R$50; 0 desliga)")
     p.add_argument("--max-price", type=float,
                    help="teto de orçamento por carta em US$ (corta antes do PriceCharting); 0=sem teto")
-    p.add_argument("--max-english", type=int,
-                   help="encerra cada set/passada após N listagens INGLESAS válidas (0=todas)")
+    p.add_argument("--max-selected", "--max-english", dest="max_english", type=_nonnegative,
+                   help="encerra cada set/passada após N listagens dos idiomas selecionados "
+                        "(0=todas; --max-english é alias legado)")
     p.add_argument("--top-n", type=_nonnegative, help="máximo de deals gravados/reportados; 0 = todos (default)")
     scope = p.add_mutually_exclusive_group()
     scope.add_argument("--raw-only", action="store_true", help="só cartas soltas NM")
@@ -75,6 +118,12 @@ def _parse_group(value: str | None) -> list[int] | None:
 
 
 def _apply_overrides(settings, args) -> None:
+    if getattr(args, "languages", None) is not None:
+        settings.languages = args.languages
+    if getattr(args, "conditions", None) is not None:
+        settings.raw_conditions = args.conditions
+    if getattr(args, "grades", None) is not None:
+        settings.graded_allow = args.grades
     if getattr(args, "top_n", None) is not None:
         settings.top_n = args.top_n
     if getattr(args, "interval", None) is not None:
@@ -149,7 +198,10 @@ def main(argv: list[str] | None = None) -> int:
         print(describe_groups())
         return 0
     setup_logging(logging.INFO)
-    settings = load_settings()
+    try:
+        settings = load_settings()
+    except ValueError as exc:
+        parser.error(str(exc))
     _apply_overrides(settings, args)
 
     if args.command == "warm":
