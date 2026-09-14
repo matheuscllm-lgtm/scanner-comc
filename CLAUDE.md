@@ -39,15 +39,17 @@ Erros recorrentes (3 famílias — detalhe no manual):
 2. **Git:** `main` local defasado por squash-merge PARECE pendência; teste real = `git diff --stat origin/main <branch>` vazio.
 3. **Honestidade de preço:** inflação de referência, fallback tratado como real, NM frouxo → sempre validar versão/condição e rotular fallback.
 
-## O que este projeto é (v0.3, scanner ÚNICO — spec do operador 2026-09-02)
+## O que este projeto é (v0.4.4, scanner ÚNICO)
 
 Scanner de arbitragem da **COMC** para cartas de Pokémon, num único fluxo:
 
 ```
 COMC (set-path browse, 2 passadas por set: cartas soltas + slabs)
- → só Pokémon da lista icônica (comc_scanner/iconic_pokemon.csv, top-100 do operador)
+ → filtros explícitos de set, idioma, condição e certificadora+nota
+ → todos os Pokémon por padrão; lista icônica/chase são filtros opcionais
  → identificar a carta (matcher: set + número + total do set + nome; confiança 0-1)
- → referência de preço:  raw NM/EX-NM = TCGplayer market (tcgcsv → fallback TCGdex)
+ → referência de preço:  raw NM    = TCGplayer market (tcgcsv → fallback TCGdex)
+                         raw EX-NM = SEM preço (revisão à parte, política 2026-09-06)
                          raw LP       = mediana de ≥3 vendas "LP" da mesma carta (PriceCharting)
                          slab         = mediana de vendas da MESMA certificadora+nota+variante
  → desconto = (ref − COMC)/ref ≥ MIN_DISCOUNT_PERCENT (20)
@@ -55,8 +57,9 @@ COMC (set-path browse, 2 passadas por set: cartas soltas + slabs)
  → results/comc_deals_<escopo>_latest.json → comc_summary.py (tabela modelo MYP)
 ```
 
-- **Raw** = condição por igualdade **por era**: WotC (≤2003, `ERA_VINTAGE_MAX_YEAR`)
-  `NM` ou `EX-NM`; 2004+ só `NM` — contra o TCGplayer market. **LP** entra SÓ com
+- **Raw** = condição por igualdade: só `NM`, em todas as eras — contra o TCGplayer
+  market. **EX-NM** nunca recebe preço NM/LP por presunção: vai para a seção "revisão
+  sem referência" (política 2026-09-06; `ERA_VINTAGE_MAX_YEAR` só rotula a era). **LP** entra SÓ com
   referência LP: mediana de ≥3 vendas concluídas cujo título diga `LP`/`Lightly Played`
   (sem nota, sem outra condição, mesma variante); pré-filtro seguro antes da consulta:
   `preço COMC ≤ ref NM × (1 − desconto mín.)` (o NM é só TETO, nunca a comparação);
@@ -97,12 +100,13 @@ COMC (set-path browse, 2 passadas por set: cartas soltas + slabs)
    manualmente) — ambas na ordem do ranking. A formatação de linha tem UMA fonte:
    `comc_scanner/reporter.py` (`render_rows_table`/`render_row_line`/`classify_row`).
 3. **Mostre TODAS as linhas.**
-4. Colunas: `# | Desconto% | ROI bruto% | COMC$ | Ref$ | Spread$ | Pokémon | Carta | Set | Tipo | Ref | Conf | Status | Links`
+4. Colunas: `# | Desconto% | ROI bruto% | COMC$ | Ref$ | Spread$ | Pokémon | Carta | Set | Idioma | Tipo | Ref | Conf | Status | Links`
    (nunca "lucro": Spread$ = ref − COMC bruto, sem taxas; ROI bruto% = spread/COMC)
-   - `Tipo` = `Raw NM|EX-NM|LP` ou a nota (`PSA 10`, `CGC 10 Pristine`, `BGS 10 Black Label`);
+   - `Tipo` = `Raw NM|LP` (EX-NM só na revisão sem preço) ou a nota (`PSA 10`, `CGC 10 Pristine`, `BGS 10 Black Label`);
    - `Ref` = `TCG market|mid|low` ou `PC vendas <nota|LP> (n=…, mês..mês)`;
    - `Status` = `OK` ou `MATCH_REVIEW · motivos` (confiança <0.90, `preço:mid/low`,
-     `vendas<3(n=…)`, `coluna÷vendas`) + nota `baixa-liquidez(365d)`;
+     `vendas<3(n=…)`, `coluna÷vendas`, `TCG÷vendas-raw(m)`, `desconto-extremo(≥N%)`)
+     + nota `baixa-liquidez(365d)`;
    - `Links` = `[oferta](COMC) · [referência](página da carta no PriceCharting — raw, LP e slab;
      raw cai no TCGplayer se a carta não tiver página no PC ou se a fonte falhar)`. O PREÇO raw segue o TCGplayer market.
 5. **Não recomende comprar.**
@@ -116,34 +120,38 @@ COMC (set-path browse, 2 passadas por set: cartas soltas + slabs)
 ```bash
 pip install -r requirements.txt && playwright install chromium   # 1ª vez
 python -m comc_scanner list-groups                               # sem rede
-python -m comc_scanner scan --group 1                             # raw + slabs, 20%, lista icônica
+python -m comc_scanner scan --group 1                             # raw + slabs, 20%, todos os Pokémon
 python -m comc_scanner scan --group all                           # 12 grupos em sequência (1999-2023)
 python -m comc_scanner scan --sets "Base Set,Jungle" --era vintage
+python -m comc_scanner scan --sets "SV: Scarlet & Violet 151" --languages ja --grades "PSA 10"
 ```
 
 Flags do `scan`: `--group N|all` xor `--sets` (igualdade exata do nome/alias/abreviação
 do set — nunca substring: `"Base Set"` não pega "Base Set 2"; `"151"` NÃO casa
-"SV: Scarlet & Violet 151" — use o nome completo, `"Scarlet & Violet 151"` ou `--group`); `--era`; `--min-discount 20` (inteiro); `--min-price 10`; `--max-price`
-(teto de orçamento por carta, corta antes do PriceCharting); `--max-english N`
-(encerra o set após N listagens INGLESAS válidas — japonesas não contam; 0 = todas as
-páginas); `--raw-only` / `--slabs-only`; `--all-pokemon`; `--chase-only`;
+"SV: Scarlet & Violet 151" — use o nome completo, `"Scarlet & Violet 151"` ou `--group`);
+`--era`; `--languages en,ja,…`; `--conditions NM,LP,EX-NM`; `--grades "PSA 10,CGC 10 PRISTINE"`;
+`--min-discount 20` (inteiro); `--min-price 10`; `--max-price` (teto de orçamento por
+carta, corta antes do PriceCharting); `--max-selected N` (encerra o set após N
+listagens dos idiomas selecionados; `--max-english` é alias legado; 0 = todas);
+`--raw-only` / `--slabs-only`; `--iconic-only` / `--all-pokemon`; `--chase-only`;
 `--min-confidence`; `--max-pages`; `--max-run-seconds`; `--interval`; `--top-n`.
 Outros subcomandos: `list-groups`, `validate-slugs [--revalidate]`, `warm`, `capture`.
 `--headful`/`--restart` são aceitos por compatibilidade e não fazem nada (sempre
 headful; sempre do zero).
 
 Configuração por env (`.env.example` lista tudo): `MIN_DISCOUNT_PERCENT`,
-`MIN_COMC_PRICE`, `ICONIC_ONLY`, `SCAN_RAW`, `SCAN_SLABS`, `GRADED_ALLOW`,
-`COMC_CONDITION_ALLOW`, `TCGCSV_FORCE_REFRESH`, `PC_CACHE_DIR`…
+`MIN_COMC_PRICE`, `ICONIC_ONLY`, `SCAN_RAW`, `SCAN_SLABS`, `COMC_LANGUAGES`,
+`RAW_CONDITIONS`, `GRADED_ALLOW`, `EXTREME_DISCOUNT_PERCENT`, `RAW_PLAUSIBILITY`,
+`TCGCSV_FORCE_REFRESH`, `PC_CACHE_DIR`…
 
 ## Convenções que não mudam
 
 - **Recorrência é MANUAL** (operador, 2026-06-09): não criar Task Scheduler / cron /
   GitHub Actions de scan. (O workflow `scan.yml` via Firecrawl foi removido na v0.3.)
-- **NM-only** (raw) por igualdade com `COMC_CONDITION_ALLOW` (2004+: `nm`) /
-  `COMC_CONDITION_ALLOW_VINTAGE` (WotC ≤2003: `nm,ex-nm`); LP só com referência LP própria; e
-  **English-only** (descarta sub-impressões JP/KR/…): casar outra condição/idioma com o
-  preço EN NM seria falso positivo.
+- **Condição e idioma exatos:** NM usa a referência inglesa do TCGplayer; LP só usa
+  vendas explicitamente LP; EX-NM fica sem preço presumido. Idiomas selecionados que
+  não sejam inglês aparecem como descoberta sem referência, nunca com margem calculada,
+  até existir fonte de vendas concluídas no mesmo idioma.
 - **Desconto sobre a referência**: `(ref − COMC)/ref` (`margin.py`), limiar inteiro
   `MIN_DISCOUNT_PERCENT` (default 20). ROI bruto `(ref − COMC)/COMC` e spread US$ vêm de
   `ranking.compute_metrics` e só ordenam. Sem taxas embutidas. **Diagnóstico** (operador):
@@ -156,11 +164,22 @@ Configuração por env (`.env.example` lista tudo): `MIN_DISCOUNT_PERCENT`,
   próprio set (`page1_own_share` no catálogo); a guarda de paginação é a segunda rede.
 - **Lista de Pokémon fora do código** (`iconic_pokemon.csv`); nada hardcoded.
 - **Referência de slab = PriceCharting por nota**; TCGplayer não precifica slab.
+- **Sinalização, nunca troca de preço (2026-09-06):** (a) **plausibilidade raw NM** —
+  para cada carta solta aprovada, o scanner compara o TCGplayer market com a mediana
+  de ≥3 vendas de carta solta da mesma carta/variante no PriceCharting
+  (`pricecharting_client.raw_plausibility`; qualquer condição, sem nota — por isso
+  NÃO serve de referência financeira); divergência >40% (`RAW_SALES_DEVIATION_MAX`)
+  → `MATCH_REVIEW · TCG÷vendas-raw(m)`. Caso real que motivou: Base Set Charizard
+  4/102 market US$868 vs vendas US$329. `RAW_PLAUSIBILITY=0` desliga; falha da
+  fonte só conta no funil. (b) **desconto extremo** — desconto ≥
+  `EXTREME_DISCOUNT_PERCENT` (default 60; 0 desliga) → `MATCH_REVIEW ·
+  desconto-extremo`, nunca descartado. Os dois valores viajam no JSON do run e a
+  entrega os reusa (`comc_summary.py` nunca reclassifica com outro limiar).
 
 ## Testes
 
 ```bash
-python -m pytest tests/    # 259 testes — offline, sem rede, sem browser
+python -m pytest tests/    # 307 testes — offline, sem rede, sem browser
 ```
 
 `tests/fixtures/` traz páginas REAIS: vitrine ungraded (2026-06-08), duas vitrines
@@ -182,7 +201,7 @@ comc_scanner/
   pipeline.py            Scanner.run_scan (2 passadas/set) + process_listing (funil único) + FunnelStats
   matcher.py / normalize.py / tcg_index.py   identificação da carta no TCGplayer (confiança 0-1)
   tcgcsv_client.py / tcgdex_client.py        referência raw (market → mid → low; fallback TCGdex)
-  pricecharting_client.py                    mediana de vendas comparáveis (slab por nota exata; raw LP) + guardas nome/número/set
+  pricecharting_client.py                    mediana de vendas comparáveis (slab por nota exata; raw LP) + plausibilidade raw + guardas nome/número/set
   margin.py              desconto (ref − comc)/ref
   ranking.py             métricas (desconto, ROI bruto, spread) + ordem de ranking
   reporter.py            tabela canônica + classify_row (OK/MATCH_REVIEW) + JSON/CSV + funil
@@ -196,4 +215,4 @@ results/                 saídas (gitignored)
 
 - Código = **branch + PR**; nunca push direto na `main`.
 - Dados de scan, `.env`, caches e perfis de navegador não entram no repo.
-- Versão: **0.4.3** (`pyproject.toml` + `CHANGELOG.md`, 2026-09-02).
+- Versão: **0.4.4** (`pyproject.toml` + `CHANGELOG.md`, 2026-09-11).
