@@ -22,7 +22,7 @@ sessão ficam num `HANDOFF.md` local, fora do repositório (gitignored).
 
 ## 🛰️ Convenções da frota (cross-scanner)
 
-> **Manual completo** (repo privado): https://github.com/matheuscllm-lgtm/scanners-commons — erros comuns, referências de preço, chaves, GitHub Actions e modelo de entrega de TODOS os scanners. Cópia-mestra local (PC do operador): `C:\Users\mathe\scanners-commons\`.
+> **Manual completo** (repo público): https://github.com/matheuscllm-lgtm/scanners-commons — erros comuns, referências de preço, chaves, GitHub Actions e modelo de entrega de TODOS os scanners. Cópia-mestra local (PC do operador): `C:\Users\mathe\scanners-commons\`.
 
 Invariantes que valem para TODOS os scanners:
 
@@ -32,6 +32,7 @@ Invariantes que valem para TODOS os scanners:
 - **Nunca recomendar compra** — o scanner reporta; a decisão de capital é do operador.
 - **Entrega = tabela markdown no chat** (nunca XLSX/CSV por padrão), gerada pela ferramenta do repo — nunca montada à mão —, mostrando TODAS as linhas. Coluna `Carta` = nome + número; coluna `Links` = `[oferta](url) · [referência](url)`.
 - ⚠️ **Threshold deste scanner = percentual INTEIRO** (`--min-discount 20`, env `MIN_DISCOUNT_PERCENT`), como MYP/Liga/eBay. (Até a v0.2 era fração `0.30`; mudou na consolidação de 2026-09-02.)
+- **Sem check-ins automáticos de PR** (operador, 2026-09-12): depois de abrir um PR, a sessão reporta o link no chat e **para** — sem `subscribe_pr_activity`, sem check-in agendado (`send_later`/Routine/cron), sem poll de CI/review. Assinatura de PR criada pelo harness deve ser cancelada. Exceção única: pedido explícito do operador ("acompanha esse PR").
 
 Erros recorrentes (3 famílias — detalhe no manual):
 
